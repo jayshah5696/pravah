@@ -1,12 +1,17 @@
-from pravah.llm import completion_llm
-from pravah.prompts import generate_prompt_template
-from pravah.retrieval import RetrievalEngine
-from pravah.search import search_query, get_text_from_url
 import asyncio
 import aiohttp
 from rich.console import Console
 from rich.markdown import Markdown
 from functools import lru_cache
+from dotenv import load_dotenv
+import os
+load_dotenv()
+from pravah.llm import completion_llm
+from pravah.prompts import generate_prompt_template
+from pravah.retrieval import RetrievalEngine
+from pravah.search import search_query, get_text_from_url
+
+api_key=os.environ['TVLY_API_KEY']
 
 @lru_cache(maxsize=128)
 def cached_search_query(query):
@@ -31,7 +36,7 @@ async def main():
 
         # Search for relevant context using the input query
         console.print("Searching for relevant context...")
-        search_results = search_query(input_query)
+        search_results = search_query(input_query, api_key=api_key)
         console.print(f"Search results")
 
         console.print("Fetching texts from search results...")
@@ -48,13 +53,16 @@ async def main():
         retrival = RetrievalEngine(dict_of_texts, tokens=True,chunk_size=1500, overlap=300)
         
         console.print("Performing keyword search on the input query...")
-        context = await retrival.keyword_search(input_query,10)
+        context = await retrival.keyword_search(input_query,20)
         # context = await retrival.combined_search(input_query,10)
+
+        console.print('Ranking the context...')
+        context = await retrival.rerank_chunks(input_query, context,10)
         console.print(f"Retrieved context:")
 
         console.print("Generating prompt template...")
         prompt = generate_prompt_template(input_query, context)
-        console.print(f"Generated prompt: {prompt}")
+        # console.print(f"Generated prompt: {prompt}")
 
         console.print("Getting completion from LLM...")
         output = completion_llm(prompt,model='openai/gpt-4o-mini',temperature=0.5)
@@ -63,6 +71,10 @@ async def main():
         # Render the Markdown output using rich
         md = Markdown(output)
         console.print(md)
+        # output = completion_llm(prompt,model='openai/gpt-4o-mini',temperature=0.5,stream=True)
+        # for part in output:
+        #     # console.clear()
+        #     console.print(Markdown(part.choices[0].delta.content or ""), style="bold green")
 
 if __name__ == "__main__":
     asyncio.run(main())

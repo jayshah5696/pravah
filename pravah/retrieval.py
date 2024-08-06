@@ -10,8 +10,10 @@ from dotenv import load_dotenv
 import tiktoken
 import re
 import litellm
-from functools import lru_cache  # Import lru_cache
-load_dotenv()
+from rerankers import Reranker
+from functools import lru_cache 
+from cachetools import LRUCache, cached  
+from cachetools.keys import hashkey  
 
 class LiteLLMEmbeddingClient:
     def __init__(self, model: str, api_key: str):
@@ -34,7 +36,8 @@ class RetrievalEngine:
                 overlap: int = 100,
                 tokens: bool = False,
                 embed_client = LiteLLMEmbeddingClient(model= "text-embedding-3-small",
-                                                      api_key=os.environ['OPENAI_API_KEY'])):
+                                                      api_key=os.environ['OPENAI_API_KEY']),
+                reranker = Reranker('flashrank')):
         self.chunk_size = chunk_size
         self.overlap = overlap
         self.tokens = tokens
@@ -43,6 +46,7 @@ class RetrievalEngine:
         self.embed_client = embed_client
         self.embeddings = None
         self.index = None
+        self.reranker = reranker
         
 
     def chunk_texts(self, texts: List[dict]) -> List[dict]:
@@ -224,3 +228,25 @@ class RetrievalEngine:
         self.bm25.idf = bm25_data['idf']
         self.bm25.doc_len = bm25_data['doc_len']
         self.bm25.avgdl = bm25_data['avgdl']
+
+    async def rerank_chunks(self, query: str, chunks: List[dict], top_k: int = 5) -> List[dict]:
+        """Rerank chunks of text using the Reranker library.
+        
+        Args:
+            query (str): The query string.
+            chunks (List[dict]): The list of chunks to rerank.
+            top_k (int): The number of top results to return.
+        
+        Returns:
+            List[dict]: The top-k ranked chunks.
+        """
+        # Extract texts from chunks
+        texts = [chunk['content'] for chunk in chunks]
+        # Perform reranking
+        results = await self.reranker.rank_async(query=query, docs=texts)
+        # Extract top-k results
+        top_results = results.top_k(top_k)
+        # Map results back to chunks
+        ranked_chunks = [chunks[result.document.doc_id] for result in top_results]
+        return ranked_chunks
+    

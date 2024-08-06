@@ -7,3 +7,5 @@ tiktoken==0.1.2
 litellm==0.1.0
 python-dotenv==0.19.2
 tavily==0.1.0
+rerankers[api]
+rerankers[fastrank]

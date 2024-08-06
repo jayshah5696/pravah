@@ -3,7 +3,6 @@ from rich.pretty import pprint
 import os
 # Load environment variables from .env file
 from dotenv import load_dotenv
-load_dotenv()
 
 # Safely get the API key
 # api_key = os.getenv('GROQ_API_KEY')
@@ -12,9 +11,12 @@ load_dotenv()
 
 # print(api_key)
 
-def completion_llm(text, model='groq/llama3-70b-8192', temperature=0.7):
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+def completion_llm(text, model='groq/llama3-70b-8192', temperature=0.7, stream=False):
     messages = [{ "content": text, "role": "user" }]
-    response = completion(model=model, messages=messages, temperature=temperature)
+    response = completion(model=model, messages=messages, temperature=temperature,stream=stream)
+    if stream:
+        return response
     return response.choices[0].message.content
 
 def chat_llm(input, model='groq/llama3-70b-8192', temperature=0.7):

@@ -13,10 +13,10 @@ from bs4 import MarkupResemblesLocatorWarning
 
 warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 
-load_dotenv()
-api_key=os.environ['TVLY_API_KEY']
+# load_dotenv()
+# api_key=os.environ['TVLY_API_KEY']
 
-def search_query(query:str):
+def search_query(query:str, api_key):
     tavily_client = TavilyClient(api_key=api_key)
     results = tavily_client.search(query,
                                include_raw_content=True)
