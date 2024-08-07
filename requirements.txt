@@ -8,6 +8,8 @@ tiktoken
 python-dotenv==0.19.2
 tavily-python
 rerankers[api]
-rerankers[fastrank]
+rerankers[flashrank]
 streamlit
 duckdb
+rank_bm25
+beautifulsoup4
