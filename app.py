@@ -1,0 +1,136 @@
+import streamlit as st
+import asyncio
+import aiohttp
+import duckdb
+from rich.console import Console
+from rich.markdown import Markdown
+from functools import lru_cache
+from dataclasses import dataclass
+from dotenv import load_dotenv
+import os
+load_dotenv()
+from pravah.llm import completion_llm
+from pravah.prompts import generate_prompt_template
+from pravah.retrieval import RetrievalEngine
+from pravah.search import search_query, get_text_from_url
+
+
+
+# Load API key from environment
+search_tvly_api_key = os.environ['TVLY_API_KEY']
+
+# Define configuration dataclass
+@dataclass
+class Config:
+    search_tvly_api_key: str
+    model: str = 'openai/gpt-4o-mini'
+    temperature: float = 0.5
+    tokens: bool = True
+    chunk_size: int = 1500
+    overlap: int = 300
+    keyword_search_limit: int = 20
+    rerank_limit: int = 10
+
+config = Config(search_tvly_api_key=search_tvly_api_key)
+
+# Initialize DuckDB connection
+conn = duckdb.connect(database=':memory:')
+conn.execute("CREATE TABLE IF NOT EXISTS chat_history (id INTEGER PRIMARY KEY, user_input TEXT, response TEXT)")
+
+# Cache search query
+@lru_cache(maxsize=128)
+def cached_search_query(query):
+    return search_query(query,api_key = config.search_tvly_api_key)
+
+# Fetch text from URL
+@lru_cache(maxsize=128)
+async def fetch_text(session, url):
+    return await get_text_from_url(url)
+
+# Fetch all texts from URLs
+async def fetch_all_texts(urls):
+    async with aiohttp.ClientSession() as session:
+        tasks = [fetch_text(session, url) for url in urls]
+        return await asyncio.gather(*tasks)
+
+# Main Streamlit app
+def main():
+    st.title("Pravaha")
+
+    # Sidebar configuration
+    st.sidebar.header("Configuration")
+    config.model = st.sidebar.text_input("Model", config.model)
+    config.temperature = st.sidebar.slider("Temperature", 0.0, 1.0, config.temperature)
+    config.chunk_size = st.sidebar.number_input("Chunk Size", value=config.chunk_size)
+    config.overlap = st.sidebar.number_input("Overlap", value=config.overlap)
+    config.keyword_search_limit = st.sidebar.number_input("Keyword Search Limit", value=config.keyword_search_limit)
+    config.rerank_limit = st.sidebar.number_input("Rerank Limit", value=config.rerank_limit)
+
+    # Chat input
+    user_input = st.text_input("Enter your query (or 'quit' to exit):")
+    if st.button("Submit"):
+        if user_input.lower() == 'quit':
+            st.stop()
+
+        st.write("Searching for relevant context...")
+        search_results = cached_search_query(user_input)
+        st.write("Search results")
+
+        st.write("Fetching texts from search results...")
+        urls = [result['url'] for result in search_results['results']]
+        texts = asyncio.run(fetch_all_texts(urls))
+        dict_of_texts = [{'content': text, 'url': url} for text, url in zip(texts, urls)]
+
+        st.write(f"Fetched texts: {len(dict_of_texts)}")
+        st.write([len(text['content']) for text in dict_of_texts])
+
+        st.write("Initializing RetrievalEngine with fetched texts...")
+        retrival = RetrievalEngine(dict_of_texts, tokens=config.tokens, chunk_size=config.chunk_size, overlap=config.overlap)
+
+        st.write("Performing keyword search on the input query...")
+        context = asyncio.run(retrival.keyword_search(user_input, config.keyword_search_limit))
+
+        st.write('Ranking the context...')
+        context = asyncio.run(retrival.rerank_chunks(user_input, context, config.rerank_limit))
+        st.write("Retrieved context:")
+
+        st.write("Generating prompt template...")
+        prompt = generate_prompt_template(user_input, context)
+
+        st.write("Getting completion from LLM...")
+        output = completion_llm(prompt, model=config.model, temperature=config.temperature)
+        st.write("LLM output:")
+
+        # md = Markdown(output)
+        st.markdown(output)
+
+        # Save chat history to DuckDB
+        max_id = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM chat_history").fetchone()[0]
+        conn.execute("INSERT INTO chat_history (id, user_input, response) VALUES (?, ?, ?)", (max_id, user_input, output))
+
+    # Display chat history
+    st.sidebar.header("Chat History")
+    chat_history = conn.execute("SELECT * FROM chat_history").fetchall()
+    for chat in chat_history:
+        st.sidebar.write(f"User: {chat[1]}")
+        st.sidebar.write(f"Response: {chat[2]}")
+
+    # Reset current context button
+    if st.sidebar.button("Reset Current Context"):
+        st.session_state['current_context'] = []
+
+    # Right-side panel for visualizing and bringing history back
+    st.sidebar.header("Visualize and Use History")
+    selected_history = st.sidebar.selectbox("Select a history to use", [f"ID: {chat[0]} - {chat[1]}" for chat in chat_history])
+    if st.sidebar.button("Use Selected History"):
+        selected_id = int(selected_history.split()[1])
+        selected_chat = conn.execute("SELECT * FROM chat_history WHERE id = ?", (selected_id,)).fetchone()
+        st.session_state['current_context'] = selected_chat
+
+    # Display current context
+    if 'current_context' in st.session_state:
+        st.write("Current Context:")
+        st.write(st.session_state['current_context'])
+
+if __name__ == "__main__":
+    main()
