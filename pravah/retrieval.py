@@ -104,7 +104,7 @@ class RetrievalEngine:
 
     def chunk_text_by_tokens(self, text, max_token_length=100, overlap=0):
         enc = tiktoken.get_encoding("cl100k_base")
-        tokens = enc.encode(text)
+        tokens = enc.encode(text,disallowed_special=())
         chunks = []
 
         for i in range(0, len(tokens), max_token_length - overlap):
