@@ -2,8 +2,6 @@ import streamlit as st
 import asyncio
 import aiohttp
 import duckdb
-from rich.console import Console
-from rich.markdown import Markdown
 from functools import lru_cache
 from dataclasses import dataclass
 from dotenv import load_dotenv

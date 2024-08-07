@@ -4,6 +4,8 @@
 
 Pravāha is your personal AI search assistant, bringing the power of a local search engine right to your fingertips. Inspired by Perplexity.ai, Pravāha lets you explore the fascinating world of Retrieval Augmented Generation (RAG) by combining cutting-edge search technology with the intelligence of Large Language Models (LLMs).
 
+![Pravāha Demo](pravah/assets/demo.gif)
+
 **Goal:**
 
 Our mission is to empower users with a local, customizable, and insightful search experience. Pravāha aims to replicate the core functionality of popular search assistants like Perplexity, allowing you to delve deeper into information retrieval and language models.
@@ -12,13 +14,19 @@ Our mission is to empower users with a local, customizable, and insightful searc
 
 With Pravāha, you can witness firsthand how search engines and LLMs work in harmony. By understanding the underlying mechanisms of RAG, you can gain valuable insights into the future of information retrieval and AI-powered search.
 
+**Key Features:**
+
+* **Streamlit Web Interface:** Easy-to-use web application for interacting with Pravāha.
+* **Advanced Reranking:** Utilizes the `answerdotai/reranker` library with FlashRank for improved result relevance.
+* **Hybrid Search:** Combines BM25 and semantic search for comprehensive results.
+* **LLM Integration:** Leverages OpenAI's language models through LiteLLM for intelligent responses.
+
 **In Progress & Future Enhancements:**
 
 Pravāha is constantly evolving! We are actively working on exciting new features, including:
 
 * **Streaming Responses:** Experience real-time search results as they are generated.
 * **Expanded Search Tool Support:** Integrate with more search providers for a wider range of sources.
-* **Advanced Rerankers:** Improve the relevance and accuracy of search results.
 * **Persistent Storage with DuckDB:** Store and manage your search history and data locally.
 * **Agentic RAG with LangGraph:** Explore the potential of agentic search and knowledge graphs.
 
@@ -28,35 +36,27 @@ The name **Pravāha** (प्रवाह) is derived from Sanskrit, meaning "fl
 
 **System Architecture:**
 
-```dot
-digraph G {
-    A [label="Query"];
-    B [label="Search Engine"];
-    C [label="Retrieval Engine"];
-    D [label="LLM"];
-    E [label="Response"];
-    
-    A -> B;
-    B -> C;
-    C -> D;
-    D -> E;
-    E -> A;
-    
-    subgraph cluster_0 {
-        label = "Search Engine";
-        B1 [label="Tavily Search API"];
-    }
-    
-    subgraph cluster_1 {
-        label = "Retrieval Engine";
-        C1 [label="BM25 & Semantic Search"];
-    }
-    
-    subgraph cluster_2 {
-        label = "LLM";
-        D1 [label="LiteLLM (OpenAI)"];
-    }
-}
+```mermaid
+flowchart TD
+    A[Query] --> B[Search Engine]
+    B --> C[Retrieval Engine]
+    C --> D[LLM]
+    D --> E[Response]
+
+    subgraph Search Engine
+        B1[Tavily Search API]
+        B2[Web Scraping]
+    end
+
+    subgraph Retrieval Engine
+        C1[Chunking]
+        C2[BM25 & Semantic Search]
+        C3[Reranker]
+    end
+
+    subgraph LLM
+        D1[LiteLLM OpenAI]
+    end
 ```
 
 ## Getting Started
@@ -79,12 +79,15 @@ digraph G {
     OPENAI_API_KEY=your_openai_api_key
     ```
 
-4. **Run the application**:
+4. **Run the Streamlit application**:
     ```sh
-    python main.py
+    streamlit run app.py
     ```
 
 ## File Overview
+
+### `app.py`
+Implements the Streamlit web interface for interacting with Pravāha.
 
 ### `prompts.py`
 Generates prompt templates using Jinja2 for the RAG system.
@@ -96,4 +99,12 @@ Handles the main application logic, including user input, search queries, and di
 Implements the search functionality using the Tavily API and web scraping.
 
 ### `retrieval.py`
-Manages text chunking, embedding, and retrieval using BM25 and FAISS.
+Manages text chunking, embedding, and retrieval using BM25 and FAISS. Includes reranking functionality using FlashRank.
+
+## Contributing
+
+We welcome contributions to Pravāha! Please feel free to submit issues, feature requests, or pull requests to help improve the project.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details or visit [MIT License](https://opensource.org/licenses/MIT).
