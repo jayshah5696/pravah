@@ -33,7 +33,11 @@ config = Config(search_tvly_api_key=search_tvly_api_key)
 
 # Initialize DuckDB connection
 conn = duckdb.connect(database='pravah.db')
-conn.execute("CREATE TABLE IF NOT EXISTS chat_history (id INTEGER PRIMARY KEY, user_input TEXT, response TEXT)")
+# Check if the table exists before creating it
+try:
+    conn.execute("SELECT 1 FROM chat_history LIMIT 1")
+except duckdb.CatalogException:
+    conn.execute("CREATE TABLE chat_history (id INTEGER PRIMARY KEY, user_input TEXT, response TEXT)")
 
 # Cache search query
 @lru_cache(maxsize=128)
@@ -77,7 +81,7 @@ def main():
     if st.sidebar.button("Reset Chat"):
         st.session_state.messages = []
         st.session_state.current_context = []
-        st.experimental_rerun()
+        st.rerun()
     # Display chat history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
@@ -169,7 +173,7 @@ def main():
         st.session_state.current_context = selected_chat
         st.session_state.messages.append({"role": "user", "content": selected_chat[1]})
         st.session_state.messages.append({"role": "assistant", "content": selected_chat[2]})
-        st.experimental_rerun()
+        st.rerun()
 
     # Display current context
     # if 'current_context' in st.session_state and st.session_state['current_context']:
