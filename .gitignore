@@ -2,3 +2,5 @@
 *.flashrank_cache/
 # pycache
 *__pycache__/
+*.db
+*.db.wal

@@ -34,7 +34,7 @@ class Config:
 config = Config(search_tvly_api_key=search_tvly_api_key)
 
 # Initialize DuckDB connection
-conn = duckdb.connect(database=':memory:')
+conn = duckdb.connect(database='pravah.db')
 conn.execute("CREATE TABLE IF NOT EXISTS chat_history (id INTEGER PRIMARY KEY, user_input TEXT, response TEXT)")
 
 # Cache search query
@@ -133,13 +133,20 @@ def main():
 
             # Get completion from LLM
             update_intermediate("Getting completion from LLM...")
-            output = completion_llm(prompt_template, model=config.model, temperature=config.temperature)
+            stream = completion_llm(prompt_template, model=config.model, temperature=config.temperature, stream=True)
 
             # Clear the intermediate placeholder
             intermediate_placeholder.empty()
 
+            # Display the streaming response
+            for chunk in stream:
+                if chunk.choices[0].delta.content is not None:
+                    full_response += chunk.choices[0].delta.content
+                    response_placeholder.markdown(full_response + "▌")
+
+            response_placeholder.empty()
             # Display the final response
-            response_placeholder.markdown(output)
+            response_placeholder.markdown(full_response)
         st.session_state.messages.append({"role": "assistant", "content": full_response})
 
         # Save chat history to DuckDB
