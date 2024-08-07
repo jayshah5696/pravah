@@ -4,7 +4,7 @@
 
 Pravāha is your personal AI search assistant, bringing the power of a local search engine right to your fingertips. Inspired by Perplexity.ai, Pravāha lets you explore the fascinating world of Retrieval Augmented Generation (RAG) by combining cutting-edge search technology with the intelligence of Large Language Models (LLMs).
 
-![Pravāha Demo](pravah/assets/demo.gif)
+![Pravāha Demo](assets/demo.gif)
 
 **Goal:**
 
