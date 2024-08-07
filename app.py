@@ -53,6 +53,10 @@ async def fetch_all_texts(urls):
         tasks = [fetch_text(session, url) for url in urls]
         return await asyncio.gather(*tasks)
 
+
+def display_intermediate_result(message):
+    with st.empty():
+        st.info(message)
 # Main Streamlit app
 def main():
     st.title("Pravaha")
@@ -102,7 +106,8 @@ def main():
         st.write("LLM output:")
 
         # md = Markdown(output)
-        st.markdown(output)
+        placeholder = st.empty()  # Create a placeholder to clear previous text
+        placeholder.markdown(output)
 
         # Save chat history to DuckDB
         max_id = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM chat_history").fetchone()[0]
@@ -121,7 +126,9 @@ def main():
 
     # Right-side panel for visualizing and bringing history back
     st.sidebar.header("Visualize and Use History")
-    selected_history = st.sidebar.selectbox("Select a history to use", [f"ID: {chat[0]} - {chat[1]}" for chat in chat_history])
+    chat_history = conn.execute("SELECT id, user_input, response FROM chat_history").fetchall()
+    previous_queries = [f"ID: {chat[0]} - {chat[1]}" for chat in chat_history]
+    selected_history = st.sidebar.selectbox("Select a history to use", previous_queries)
     if st.sidebar.button("Use Selected History"):
         selected_id = int(selected_history.split()[1])
         selected_chat = conn.execute("SELECT * FROM chat_history WHERE id = ?", (selected_id,)).fetchone()
