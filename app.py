@@ -6,11 +6,13 @@ from functools import lru_cache
 from dataclasses import dataclass
 from dotenv import load_dotenv
 import os
+import uuid
 load_dotenv()
 from pravah.llm import completion_llm
-from pravah.prompts import generate_prompt_template
+from pravah.prompts import generate_prompt_template, query_rewriter, extract_rewritten_prompt
 from pravah.retrieval import RetrievalEngine
 from pravah.search import search_query, get_text_from_url
+
 
 
 
@@ -28,17 +30,43 @@ class Config:
     overlap: int = 300
     keyword_search_limit: int = 20
     rerank_limit: int = 10
+    rewrite_model: str = 'groq/llama-3.1-8b-instant'
+    rewrite_model_temperature: float = 0.1
 
 config = Config(search_tvly_api_key=search_tvly_api_key)
 
 # Initialize DuckDB connection
-conn = duckdb.connect(database='pravah.db')
-# Check if the table exists before creating it
-try:
-    conn.execute("SELECT 1 FROM chat_history LIMIT 1")
-except duckdb.CatalogException:
-    conn.execute("CREATE TABLE chat_history (id INTEGER PRIMARY KEY, user_input TEXT, response TEXT)")
 
+def create_tables(conn):
+    conn.execute("CREATE TABLE IF NOT EXISTS chat_history (conversation_uuid UUID PRIMARY KEY, user_input TEXT, response TEXT)")
+    conn.execute("CREATE TABLE IF NOT EXISTS search_results (conversation_uuid UUID, search_result JSON, FOREIGN KEY(conversation_uuid) REFERENCES chat_history(conversation_uuid))")
+    conn.execute("CREATE TABLE IF NOT EXISTS fetched_texts (url TEXT PRIMARY KEY, text TEXT)")
+    conn.execute("CREATE TABLE IF NOT EXISTS retrieved_chunks (conversation_uuid UUID, search_type TEXT, chunk TEXT, FOREIGN KEY(conversation_uuid) REFERENCES chat_history(conversation_uuid))")
+    conn.execute("CREATE TABLE IF NOT EXISTS re_written_prompt (conversation_uuid UUID, re_written_prompt TEXT, FOREIGN KEY(conversation_uuid) REFERENCES chat_history(conversation_uuid))")
+
+def save_to_duckdb(conn, conversation_uuid, prompt, full_response, search_results, texts, urls, context_keyword, context_reranker, re_written_prompt):
+    conn.execute("INSERT INTO chat_history (conversation_uuid, user_input, response) VALUES (?, ?, ?)", (conversation_uuid, prompt, full_response))
+    # Save search results to DuckDB
+    conn.execute("INSERT INTO search_results (conversation_uuid, search_result) VALUES (?, ?)", (conversation_uuid, search_results))
+    # Save fetched texts to DuckDB
+    for text, url in zip(texts, urls):
+        # Check if the URL already exists in the database
+        existing_text = conn.execute("SELECT text FROM fetched_texts WHERE url = ?", (url,)).fetchone()
+        if existing_text is None:
+            conn.execute("INSERT INTO fetched_texts (url, text) VALUES (?, ?)", (url, text))
+    # Save retrieved chunks (keyword search) to DuckDB
+    for chunk in context_keyword:
+        conn.execute("INSERT INTO retrieved_chunks (conversation_uuid, search_type, chunk) VALUES (?, ?, ?)", (conversation_uuid, 'keyword_search', chunk))
+    # Save retrieved chunks (reranked) to DuckDB
+    for chunk in context_reranker:
+        conn.execute("INSERT INTO retrieved_chunks (conversation_uuid, search_type, chunk) VALUES (?, ?, ?)", (conversation_uuid, 'reranked', chunk))
+    # Save re-written prompt to DuckDB
+    conn.execute("INSERT INTO re_written_prompt (conversation_uuid, re_written_prompt) VALUES (?, ?)", (conversation_uuid, re_written_prompt))
+
+
+conn = duckdb.connect(database='pravah.db')
+# Check if the tables exist before creating them
+create_tables(conn)
 # Cache search query
 @lru_cache(maxsize=128)
 def cached_search_query(query):
@@ -71,24 +99,44 @@ def main():
     config.overlap = st.sidebar.number_input("Overlap", value=config.overlap)
     config.keyword_search_limit = st.sidebar.number_input("Keyword Search Limit", value=config.keyword_search_limit)
     config.rerank_limit = st.sidebar.number_input("Rerank Limit", value=config.rerank_limit)
+    config.rewrite_model = st.sidebar.text_input("Rewrite Model", config.rewrite_model)
+    config.rewrite_model_temperature = st.sidebar.slider("Rewrite Model Temperature", 0.0, 1.0, config.rewrite_model_temperature)
 
     # Chat input
     # Initialize chat history
     if "messages" not in st.session_state:
         st.session_state.messages = []
-
+    if "previous_prompt" not in st.session_state:
+        st.session_state.previous_prompt = ""
+    previous_prompt = st.session_state.previous_prompt
     # Add a button to reset chat messages
     if st.sidebar.button("Reset Chat"):
         st.session_state.messages = []
         st.session_state.current_context = []
+        st.session_state.previous_prompt = ""
         st.rerun()
+        
     # Display chat history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
     if prompt := st.chat_input("What is your question?"):
+        # Generate UUID for the conversation
+        conversation_uuid = uuid.uuid4()
+        
         st.session_state.messages.append({"role": "user", "content": prompt})
+        if previous_prompt!='':
+            re_written_prompt = extract_rewritten_prompt(completion_llm(query_rewriter(prompt,
+                                                                previous_prompt,st.session_state.messages),
+                                                                model=config.rewrite_model,
+                                                                temperature=config.rewrite_model_temperature, stream=False))
+            
+        else:
+            re_written_prompt = extract_rewritten_prompt(completion_llm(query_rewriter(prompt,None, None)))
+        print("************")
+        print(re_written_prompt)
+        print("************")
         with st.chat_message("user"):
             st.markdown(prompt)
 
@@ -107,7 +155,7 @@ def main():
 
             # Search for relevant context
             update_intermediate("Searching for relevant context...")
-            search_results = cached_search_query(prompt)
+            search_results = cached_search_query(re_written_prompt)
 
             # Fetch texts from search results
             update_intermediate("Fetching texts from search results...")
@@ -123,19 +171,21 @@ def main():
 
             # Perform keyword search
             update_intermediate("Performing keyword search on the input query...")
-            context = asyncio.run(retrieval.keyword_search(prompt, config.keyword_search_limit))
+            context_keyword = asyncio.run(retrieval.keyword_search(prompt, config.keyword_search_limit))
 
             # Rank the context
             update_intermediate('Ranking the context...')
-            context = asyncio.run(retrieval.rerank_chunks(prompt, context, config.rerank_limit))
-
+            context_reranker = asyncio.run(retrieval.rerank_chunks(prompt, context_keyword, config.rerank_limit))
+                
             # Generate prompt template
             update_intermediate("Generating prompt template...")
-            prompt_template = generate_prompt_template(prompt, context)
+            prompt_template = generate_prompt_template(prompt, context_reranker, extra_context={'search_query': re_written_prompt})
 
             # Get completion from LLM
             update_intermediate("Getting completion from LLM...")
-            stream = completion_llm(prompt_template, model=config.model, temperature=config.temperature, stream=True)
+            stream = completion_llm(prompt_template,
+                                    model=config.model,
+                                    temperature=config.temperature, stream=True)
 
             # Clear the intermediate placeholder
             intermediate_placeholder.empty()
@@ -150,30 +200,30 @@ def main():
             # Display the final response
             response_placeholder.markdown(full_response)
         st.session_state.messages.append({"role": "assistant", "content": full_response})
-
+        st.session_state.previous_prompt = re_written_prompt
         # Save chat history to DuckDB
-        max_id = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM chat_history").fetchone()[0]
-        conn.execute("INSERT INTO chat_history (id, user_input, response) VALUES (?, ?, ?)", (max_id, prompt, full_response))
+        save_to_duckdb(conn, conversation_uuid, prompt, full_response, search_results, texts, urls, context_keyword, context_reranker, re_written_prompt)
 
     # Display chat history
-    st.sidebar.header("Chat History")
-    chat_history = conn.execute("SELECT * FROM chat_history").fetchall()
-    for chat in chat_history:
-        st.sidebar.write(f"User: {chat[1]}")
-        st.sidebar.write(f"Response: {chat[2]}")
+    # st.sidebar.header("Chat History")
+    # chat_history = conn.execute("SELECT * FROM chat_history").fetchall()
+    # for chat in chat_history:
+    #     st.sidebar.write(f"User: {chat[1]}")
+    #     st.sidebar.write(f"Response: {chat[2]}")
 
     # Right-side panel for visualizing and bringing history back
     st.sidebar.header("Visualize and Use History")
-    chat_history = conn.execute("SELECT id, user_input, response FROM chat_history").fetchall()
-    previous_queries = [f"ID: {chat[0]} - {chat[1]}" for chat in chat_history]
+    chat_history = conn.execute("SELECT user_input, response FROM chat_history").fetchall()
+    previous_queries = [f"{chat[0]}" for chat in chat_history]
     selected_history = st.sidebar.selectbox("Select a history to use", previous_queries)
     if st.sidebar.button("Use Selected History"):
-        selected_id = int(selected_history.split()[1])
-        selected_chat = conn.execute("SELECT * FROM chat_history WHERE id = ?", (selected_id,)).fetchone()
+        selected_chat = conn.execute("SELECT * FROM chat_history WHERE user_input = ?", (selected_history,)).fetchone()
         st.session_state.current_context = selected_chat
         st.session_state.messages.append({"role": "user", "content": selected_chat[1]})
         st.session_state.messages.append({"role": "assistant", "content": selected_chat[2]})
+        st.session_state.previous_prompt = selected_chat[1]
         st.rerun()
+        previous_prompt = selected_chat[1]
 
     # Display current context
     # if 'current_context' in st.session_state and st.session_state['current_context']:
