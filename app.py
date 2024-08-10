@@ -6,11 +6,13 @@ from functools import lru_cache
 from dataclasses import dataclass
 from dotenv import load_dotenv
 import os
+import uuid
 load_dotenv()
 from pravah.llm import completion_llm
 from pravah.prompts import generate_prompt_template
 from pravah.retrieval import RetrievalEngine
 from pravah.search import search_query, get_text_from_url
+
 
 
 
@@ -33,11 +35,23 @@ config = Config(search_tvly_api_key=search_tvly_api_key)
 
 # Initialize DuckDB connection
 conn = duckdb.connect(database='pravah.db')
-# Check if the table exists before creating it
+# Check if the tables exist before creating them
 try:
     conn.execute("SELECT 1 FROM chat_history LIMIT 1")
 except duckdb.CatalogException:
-    conn.execute("CREATE TABLE chat_history (id INTEGER PRIMARY KEY, user_input TEXT, response TEXT)")
+    conn.execute("CREATE TABLE chat_history (conversation_uuid UUID PRIMARY KEY, user_input TEXT, response TEXT)")
+try:
+    conn.execute("SELECT 1 FROM search_results LIMIT 1")
+except duckdb.CatalogException:
+    conn.execute("CREATE TABLE search_results (conversation_uuid UUID, search_result JSON, FOREIGN KEY(conversation_uuid) REFERENCES chat_history(conversation_uuid))")
+try:
+    conn.execute("SELECT 1 FROM fetched_texts LIMIT 1")
+except duckdb.CatalogException:
+    conn.execute("CREATE TABLE fetched_texts (url TEXT PRIMARY KEY, text TEXT)")
+try:
+    conn.execute("SELECT 1 FROM retrieved_chunks LIMIT 1")
+except duckdb.CatalogException:
+    conn.execute("CREATE TABLE retrieved_chunks (conversation_uuid UUID, search_type TEXT, chunk TEXT, FOREIGN KEY(conversation_uuid) REFERENCES chat_history(conversation_uuid))")
 
 # Cache search query
 @lru_cache(maxsize=128)
@@ -88,6 +102,8 @@ def main():
             st.markdown(message["content"])
 
     if prompt := st.chat_input("What is your question?"):
+        # Generate UUID for the conversation
+        conversation_uuid = uuid.uuid4()
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
@@ -123,15 +139,15 @@ def main():
 
             # Perform keyword search
             update_intermediate("Performing keyword search on the input query...")
-            context = asyncio.run(retrieval.keyword_search(prompt, config.keyword_search_limit))
+            context_keyword = asyncio.run(retrieval.keyword_search(prompt, config.keyword_search_limit))
 
             # Rank the context
             update_intermediate('Ranking the context...')
-            context = asyncio.run(retrieval.rerank_chunks(prompt, context, config.rerank_limit))
-
+            context_reranker = asyncio.run(retrieval.rerank_chunks(prompt, context_keyword, config.rerank_limit))
+                
             # Generate prompt template
             update_intermediate("Generating prompt template...")
-            prompt_template = generate_prompt_template(prompt, context)
+            prompt_template = generate_prompt_template(prompt, context_reranker)
 
             # Get completion from LLM
             update_intermediate("Getting completion from LLM...")
@@ -152,24 +168,37 @@ def main():
         st.session_state.messages.append({"role": "assistant", "content": full_response})
 
         # Save chat history to DuckDB
-        max_id = conn.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM chat_history").fetchone()[0]
-        conn.execute("INSERT INTO chat_history (id, user_input, response) VALUES (?, ?, ?)", (max_id, prompt, full_response))
+        conn.execute("INSERT INTO chat_history (conversation_uuid, user_input, response) VALUES (?, ?, ?)", (conversation_uuid, prompt, full_response))
+        # Save search results to DuckDB
+        conn.execute("INSERT INTO search_results (conversation_uuid, search_result) VALUES (?, ?)", (conversation_uuid, search_results))
+        # Save fetched texts to DuckDB
+        for text, url in zip(texts, urls):
+            # Check if the URL already exists in the database
+            existing_text = conn.execute("SELECT text FROM fetched_texts WHERE url = ?", (url,)).fetchone()
+            if existing_text is None:
+                conn.execute("INSERT INTO fetched_texts (url, text) VALUES (?, ?)", (url, text))
+        # Save retrieved chunks (keyword search) to DuckDB
+        for chunk in context_keyword:
+            conn.execute("INSERT INTO retrieved_chunks (conversation_uuid, search_type, chunk) VALUES (?, ?, ?)", (conversation_uuid, 'keyword_search', chunk))
+        # Save retrieved chunks (reranked) to DuckDB
+        for chunk in context_reranker:
+            conn.execute("INSERT INTO retrieved_chunks (conversation_uuid, search_type, chunk) VALUES (?, ?, ?)", (conversation_uuid, 'reranked', chunk))
+
 
     # Display chat history
-    st.sidebar.header("Chat History")
-    chat_history = conn.execute("SELECT * FROM chat_history").fetchall()
-    for chat in chat_history:
-        st.sidebar.write(f"User: {chat[1]}")
-        st.sidebar.write(f"Response: {chat[2]}")
+    # st.sidebar.header("Chat History")
+    # chat_history = conn.execute("SELECT * FROM chat_history").fetchall()
+    # for chat in chat_history:
+    #     st.sidebar.write(f"User: {chat[1]}")
+    #     st.sidebar.write(f"Response: {chat[2]}")
 
     # Right-side panel for visualizing and bringing history back
     st.sidebar.header("Visualize and Use History")
-    chat_history = conn.execute("SELECT id, user_input, response FROM chat_history").fetchall()
-    previous_queries = [f"ID: {chat[0]} - {chat[1]}" for chat in chat_history]
+    chat_history = conn.execute("SELECT user_input, response FROM chat_history").fetchall()
+    previous_queries = [f"{chat[0]}" for chat in chat_history]
     selected_history = st.sidebar.selectbox("Select a history to use", previous_queries)
     if st.sidebar.button("Use Selected History"):
-        selected_id = int(selected_history.split()[1])
-        selected_chat = conn.execute("SELECT * FROM chat_history WHERE id = ?", (selected_id,)).fetchone()
+        selected_chat = conn.execute("SELECT * FROM chat_history WHERE user_input = ?", (selected_history,)).fetchone()
         st.session_state.current_context = selected_chat
         st.session_state.messages.append({"role": "user", "content": selected_chat[1]})
         st.session_state.messages.append({"role": "assistant", "content": selected_chat[2]})
