@@ -82,5 +82,51 @@ def main():
 
     print(generate_prompt_template(query, context_list))
 
+
+def re_written_prompt_template(prompt, previous_prompt, messages):
+    """
+    Generates a re-written prompt template using Jinja2 for a RAG system.
+
+    Parameters:
+    - prompt: The prompt input from the user.
+    - previous_prompt: The previous prompt that needs to be re-written.
+    - messages: A list of dictionaries, each containing 'content' and 'url' keys.
+
+    Returns:
+    - A string containing the final prompt with inline citations and structured instructions.
+    """
+    env = Environment(loader=FileSystemLoader(''))
+    template_string = """
+    <role>You are an AI assistant specializing in enhancing and refining user queries based on previous interactions.</role>
+
+    <instructions>
+    1. Analyze the user's current prompt and the previous prompt carefully.
+    2. Consider the context and conversation history to provide a more detailed and relevant prompt.
+    3. Ensure the rewritten prompt maintains the user's original intent.
+    </instructions>
+
+    <input>
+    Current prompt: {{ prompt }}
+    Previous prompt: {{ previous_prompt }}
+    </input>
+
+    <conversation_history>
+    {% for message in messages %}
+    <message>
+        <role>{{ message.role }}</role>
+        <content>{{ message.content }}</content>
+    </message>
+    {% endfor %}
+    </conversation_history>
+
+    Based on the above, please rewrite the prompt: with the relatively same size as input
+    DO NOT PROVIDE ANYTHING ELSE> JUST THE REWRITTEN PROMPT
+    """
+ 
+    template = env.from_string(template_string)
+    rendered_output = template.render(prompt=prompt, previous_prompt=previous_prompt, messages=messages)
+    print(rendered_output)
+    return rendered_output
+
 if __name__ == "__main__":
     main()
