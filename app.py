@@ -38,6 +38,7 @@ config = Config(search_tvly_api_key=search_tvly_api_key)
 # Initialize DuckDB connection
 
 def create_tables(conn):
+    # Create tables without explicit transaction management
     conn.execute("CREATE TABLE IF NOT EXISTS chat_history (conversation_uuid UUID PRIMARY KEY, user_input TEXT, response TEXT)")
     conn.execute("CREATE TABLE IF NOT EXISTS search_results (conversation_uuid UUID, search_result JSON, FOREIGN KEY(conversation_uuid) REFERENCES chat_history(conversation_uuid))")
     conn.execute("CREATE TABLE IF NOT EXISTS fetched_texts (url TEXT PRIMARY KEY, text TEXT)")
@@ -45,6 +46,7 @@ def create_tables(conn):
     conn.execute("CREATE TABLE IF NOT EXISTS re_written_prompt (conversation_uuid UUID, re_written_prompt TEXT, FOREIGN KEY(conversation_uuid) REFERENCES chat_history(conversation_uuid))")
 
 def save_to_duckdb(conn, conversation_uuid, prompt, full_response, search_results, texts, urls, context_keyword, context_reranker, re_written_prompt):
+    # Save data without explicit transaction management
     conn.execute("INSERT INTO chat_history (conversation_uuid, user_input, response) VALUES (?, ?, ?)", (conversation_uuid, prompt, full_response))
     # Save search results to DuckDB
     conn.execute("INSERT INTO search_results (conversation_uuid, search_result) VALUES (?, ?)", (conversation_uuid, search_results))
@@ -63,10 +65,8 @@ def save_to_duckdb(conn, conversation_uuid, prompt, full_response, search_result
     # Save re-written prompt to DuckDB
     conn.execute("INSERT INTO re_written_prompt (conversation_uuid, re_written_prompt) VALUES (?, ?)", (conversation_uuid, re_written_prompt))
 
-
-conn = duckdb.connect(database='pravah.db')
-# Check if the tables exist before creating them
-create_tables(conn)
+with duckdb.connect(database='pravah.db') as conn:  # Use context manager for connection
+    create_tables(conn)
 # Cache search query
 @lru_cache(maxsize=128)
 def cached_search_query(query):
@@ -202,7 +202,8 @@ def main():
         st.session_state.messages.append({"role": "assistant", "content": full_response})
         st.session_state.previous_prompt = re_written_prompt
         # Save chat history to DuckDB
-        save_to_duckdb(conn, conversation_uuid, prompt, full_response, search_results, texts, urls, context_keyword, context_reranker, re_written_prompt)
+        with duckdb.connect(database='pravah.db') as conn:  
+            save_to_duckdb(conn, conversation_uuid, prompt, full_response, search_results, texts, urls, context_keyword, context_reranker, re_written_prompt)
 
     # Display chat history
     # st.sidebar.header("Chat History")
@@ -213,11 +214,13 @@ def main():
 
     # Right-side panel for visualizing and bringing history back
     st.sidebar.header("Visualize and Use History")
-    chat_history = conn.execute("SELECT user_input, response FROM chat_history").fetchall()
+    with duckdb.connect(database='pravah.db') as conn:  
+        chat_history = conn.execute("SELECT user_input, response FROM chat_history").fetchall()
     previous_queries = [f"{chat[0]}" for chat in chat_history]
     selected_history = st.sidebar.selectbox("Select a history to use", previous_queries)
     if st.sidebar.button("Use Selected History"):
-        selected_chat = conn.execute("SELECT * FROM chat_history WHERE user_input = ?", (selected_history,)).fetchone()
+        with duckdb.connect(database='pravah.db') as conn:  
+            selected_chat = conn.execute("SELECT * FROM chat_history WHERE user_input = ?", (selected_history,)).fetchone()
         st.session_state.current_context = selected_chat
         st.session_state.messages.append({"role": "user", "content": selected_chat[1]})
         st.session_state.messages.append({"role": "assistant", "content": selected_chat[2]})

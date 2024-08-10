@@ -6,7 +6,7 @@ faiss-cpu
 fastavro
 tiktoken
 python-dotenv==0.19.2
-tavily-python
+tavily-python==0.3.5
 rerankers[api]
 rerankers[flashrank]
 streamlit
