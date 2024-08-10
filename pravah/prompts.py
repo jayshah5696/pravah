@@ -113,7 +113,7 @@ def re_written_prompt_template(prompt, previous_prompt, messages):
     <conversation_history>
     {% for message in messages %}
     <message>
-        <role>{{ message.role }}</role>
+        <role>{% if message.role == 'user' %}{{ message.role }}{% else %}user{% endif %}</role>
         <content>{{ message.content }}</content>
     </message>
     {% endfor %}
