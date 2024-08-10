@@ -25,10 +25,13 @@ With Pravāha, you can witness firsthand how search engines and LLMs work in har
 
 Pravāha is constantly evolving! We are actively working on exciting new features, including:
 
-* **Streaming Responses:** Experience real-time search results as they are generated.
+* **Streaming Responses:** Experience real-time search results as they are generated. ✅
 * **Expanded Search Tool Support:** Integrate with more search providers for a wider range of sources.
-* **Persistent Storage with DuckDB:** Store and manage your search history and data locally.
-* **Agentic RAG with LangGraph:** Explore the potential of agentic search and knowledge graphs.
+* **Persistent Storage with DuckDB:** Store and manage your search history and data locally. ✅
+* **Agentic RAG with LangGraph:** Explore the potential of agentic search and knowledge graphs. 
+* **Customizable RAG Templates:** Create and share your own RAG templates (YAML) for unique search experiences.
+* **UI Improvements**: Enhance the user interface for a more intuitive and engaging experience.
+* **PRO Mode**: Unlock advanced features and settings for power users.()
 
 **Name Inspiration:**
 
