@@ -77,12 +77,32 @@ flowchart TD
 
 3. **Set up environment variables**:
     Create a `.env` file in the root directory and add your API keys:
-    ```env
+    ```sh
     TVLY_API_KEY=your_tavily_api_key
     OPENAI_API_KEY=your_openai_api_key
     ```
 
-4. **Run the Streamlit application**:
+4. **Set up DuckDB**:
+    DuckDB is used for storing chat history. Install DuckDB using the following commands based on your operating system:
+
+    - **macOS**:
+        ```sh
+        brew install duckdb
+        ```
+
+    - **Linux**:
+        ```sh
+        sudo apt-get install duckdb
+        ```
+
+    - **Windows**:
+        ```sh
+        winget install DuckDB.cli
+        ```
+
+    For more installation options, visit the [DuckDB Installation Guide](https://duckdb.org/docs/installation/).
+
+5. **Run the Streamlit application**:
     ```sh
     streamlit run app.py
     ```
