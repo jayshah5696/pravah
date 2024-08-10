@@ -9,7 +9,7 @@ import os
 import uuid
 load_dotenv()
 from pravah.llm import completion_llm
-from pravah.prompts import generate_prompt_template, re_written_prompt_template
+from pravah.prompts import generate_prompt_template, query_rewriter, extract_rewritten_prompt
 from pravah.retrieval import RetrievalEngine
 from pravah.search import search_query, get_text_from_url
 
@@ -43,6 +43,25 @@ def create_tables(conn):
     conn.execute("CREATE TABLE IF NOT EXISTS fetched_texts (url TEXT PRIMARY KEY, text TEXT)")
     conn.execute("CREATE TABLE IF NOT EXISTS retrieved_chunks (conversation_uuid UUID, search_type TEXT, chunk TEXT, FOREIGN KEY(conversation_uuid) REFERENCES chat_history(conversation_uuid))")
     conn.execute("CREATE TABLE IF NOT EXISTS re_written_prompt (conversation_uuid UUID, re_written_prompt TEXT, FOREIGN KEY(conversation_uuid) REFERENCES chat_history(conversation_uuid))")
+
+def save_to_duckdb(conn, conversation_uuid, prompt, full_response, search_results, texts, urls, context_keyword, context_reranker, re_written_prompt):
+    conn.execute("INSERT INTO chat_history (conversation_uuid, user_input, response) VALUES (?, ?, ?)", (conversation_uuid, prompt, full_response))
+    # Save search results to DuckDB
+    conn.execute("INSERT INTO search_results (conversation_uuid, search_result) VALUES (?, ?)", (conversation_uuid, search_results))
+    # Save fetched texts to DuckDB
+    for text, url in zip(texts, urls):
+        # Check if the URL already exists in the database
+        existing_text = conn.execute("SELECT text FROM fetched_texts WHERE url = ?", (url,)).fetchone()
+        if existing_text is None:
+            conn.execute("INSERT INTO fetched_texts (url, text) VALUES (?, ?)", (url, text))
+    # Save retrieved chunks (keyword search) to DuckDB
+    for chunk in context_keyword:
+        conn.execute("INSERT INTO retrieved_chunks (conversation_uuid, search_type, chunk) VALUES (?, ?, ?)", (conversation_uuid, 'keyword_search', chunk))
+    # Save retrieved chunks (reranked) to DuckDB
+    for chunk in context_reranker:
+        conn.execute("INSERT INTO retrieved_chunks (conversation_uuid, search_type, chunk) VALUES (?, ?, ?)", (conversation_uuid, 'reranked', chunk))
+    # Save re-written prompt to DuckDB
+    conn.execute("INSERT INTO re_written_prompt (conversation_uuid, re_written_prompt) VALUES (?, ?)", (conversation_uuid, re_written_prompt))
 
 
 conn = duckdb.connect(database='pravah.db')
@@ -108,13 +127,13 @@ def main():
         
         st.session_state.messages.append({"role": "user", "content": prompt})
         if previous_prompt!='':
-            re_written_prompt = completion_llm(re_written_prompt_template(prompt,
+            re_written_prompt = extract_rewritten_prompt(completion_llm(query_rewriter(prompt,
                                                                 previous_prompt,st.session_state.messages),
                                                                 model=config.rewrite_model,
-                                                                temperature=config.rewrite_model_temperature, stream=False)
+                                                                temperature=config.rewrite_model_temperature, stream=False))
             
         else:
-            re_written_prompt = prompt
+            re_written_prompt = extract_rewritten_prompt(completion_llm(query_rewriter(prompt,None, None)))
         print("************")
         print(re_written_prompt)
         print("************")
@@ -160,11 +179,13 @@ def main():
                 
             # Generate prompt template
             update_intermediate("Generating prompt template...")
-            prompt_template = generate_prompt_template(prompt, context_reranker)
+            prompt_template = generate_prompt_template(prompt, context_reranker, extra_context={'search_query': re_written_prompt})
 
             # Get completion from LLM
             update_intermediate("Getting completion from LLM...")
-            stream = completion_llm(prompt_template, model=config.model, temperature=config.temperature, stream=True)
+            stream = completion_llm(prompt_template,
+                                    model=config.model,
+                                    temperature=config.temperature, stream=True)
 
             # Clear the intermediate placeholder
             intermediate_placeholder.empty()
@@ -181,24 +202,7 @@ def main():
         st.session_state.messages.append({"role": "assistant", "content": full_response})
         st.session_state.previous_prompt = re_written_prompt
         # Save chat history to DuckDB
-        conn.execute("INSERT INTO chat_history (conversation_uuid, user_input, response) VALUES (?, ?, ?)", (conversation_uuid, prompt, full_response))
-        # Save search results to DuckDB
-        conn.execute("INSERT INTO search_results (conversation_uuid, search_result) VALUES (?, ?)", (conversation_uuid, search_results))
-        # Save fetched texts to DuckDB
-        for text, url in zip(texts, urls):
-            # Check if the URL already exists in the database
-            existing_text = conn.execute("SELECT text FROM fetched_texts WHERE url = ?", (url,)).fetchone()
-            if existing_text is None:
-                conn.execute("INSERT INTO fetched_texts (url, text) VALUES (?, ?)", (url, text))
-        # Save retrieved chunks (keyword search) to DuckDB
-        for chunk in context_keyword:
-            conn.execute("INSERT INTO retrieved_chunks (conversation_uuid, search_type, chunk) VALUES (?, ?, ?)", (conversation_uuid, 'keyword_search', chunk))
-        # Save retrieved chunks (reranked) to DuckDB
-        for chunk in context_reranker:
-            conn.execute("INSERT INTO retrieved_chunks (conversation_uuid, search_type, chunk) VALUES (?, ?, ?)", (conversation_uuid, 'reranked', chunk))
-        # Save re-written prompt to DuckDB
-        conn.execute("INSERT INTO re_written_prompt (conversation_uuid, re_written_prompt) VALUES (?, ?)", (conversation_uuid, re_written_prompt))
-        
+        save_to_duckdb(conn, conversation_uuid, prompt, full_response, search_results, texts, urls, context_keyword, context_reranker, re_written_prompt)
 
     # Display chat history
     # st.sidebar.header("Chat History")
