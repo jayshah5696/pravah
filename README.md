@@ -71,8 +71,14 @@ flowchart TD
     ```
 
 2. **Install dependencies**:
-    ```sh
-    pip install -r requirements.txt
+    - Using `pip`:
+        ```sh
+        pip install -r requirements.txt
+        ```
+    - Using `Poetry`:
+        ```sh
+        poetry install
+        poetry shell
     ```
 
 3. **Set up environment variables**:
