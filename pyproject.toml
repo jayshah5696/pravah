@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "pravah"
+version = "0.1.0"
+description = "Search Engine powered by AI"
+authors = ["Jay Shah <jayshah5696@gmail.com>"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+litellm = "^1.43.7"
+jinja2 = "^3.1.4"
+aiohttp = "^3.10.3"
+rich = "^13.7.1"
+faiss-cpu = "^1.8.0.post1"
+fastavro = "^1.9.5"
+tiktoken = "^0.7.0"
+python-dotenv = "0.19.2"
+tavily-python = "0.3.5"
+rerankers = {extras = ["flashrank"], version = "^0.4.0"}
+streamlit = "^1.37.1"
+duckdb = "^1.0.0"
+rank-bm25 = "^0.2.2"
+beautifulsoup4 = "^4.12.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -133,7 +133,9 @@ def main():
                                                                 temperature=config.rewrite_model_temperature, stream=False))
             
         else:
-            re_written_prompt = extract_rewritten_prompt(completion_llm(query_rewriter(prompt,None, None)))
+            re_written_prompt = extract_rewritten_prompt(completion_llm(query_rewriter(prompt,None, None),
+                                                                model=config.rewrite_model,
+                                                                temperature=config.rewrite_model_temperature, stream=False))
         print("************")
         print(re_written_prompt)
         print("************")
