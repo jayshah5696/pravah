@@ -14,6 +14,7 @@ from rerankers import Reranker
 from functools import lru_cache 
 from cachetools import LRUCache, cached  
 from cachetools.keys import hashkey  
+from .regax_pattern import combined_pattern
 
 class LiteLLMEmbeddingClient:
     def __init__(self, model: str, api_key: str):
@@ -34,13 +35,13 @@ class RetrievalEngine:
     def __init__(self, texts: List[dict],
                 chunk_size: int = 500,
                 overlap: int = 100,
-                tokens: bool = False,
+                chunking_method: str = 'tokens',
                 embed_client = LiteLLMEmbeddingClient(model= "text-embedding-3-small",
                                                       api_key=os.environ['OPENAI_API_KEY']),
                 reranker = Reranker('flashrank')):
         self.chunk_size = chunk_size
         self.overlap = overlap
-        self.tokens = tokens
+        self.chunking_method = chunking_method 
         self.chunks = self.chunk_texts(texts)
         self.bm25 = self.create_bm25()
         self.embed_client = embed_client
@@ -54,9 +55,11 @@ class RetrievalEngine:
         for item in texts:
             text = item['content']
             url = item['url']
-            if self.tokens:
+            if self.chunking_method == 'tokens':  
                 chunked_texts = self.chunk_text_by_tokens(text, self.chunk_size, self.overlap)
-            else:
+            elif self.chunking_method == 'regax': 
+                chunked_texts = self.chunk_regax(text, self.chunk_size, self.overlap)
+            else:  # And this line
                 chunked_texts = self.chunk_text(text, self.chunk_size, self.overlap)
             for chunk in chunked_texts:
                 chunks.append({'content': chunk, 'url': url})
@@ -249,4 +252,20 @@ class RetrievalEngine:
         # Map results back to chunks
         ranked_chunks = [chunks[result.document.doc_id] for result in top_results]
         return ranked_chunks
+    
+    def chunk_regax(self, text, max_char_length=1000, overlap=0):
+        matches = re.findall(combined_pattern, text, re.MULTILINE)
+        chunks = []
+        for match in matches:
+            if len(match) > max_char_length:
+                # Split the match into smaller chunks
+                for i in range(0, len(match), max_char_length - overlap):
+                    chunk = match[i:i + max_char_length]
+                    chunks.append(chunk)
+            else:
+                chunks.append(match)
+        
+        return chunks
+
+        
     

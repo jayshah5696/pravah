@@ -25,7 +25,7 @@ class Config:
     search_tvly_api_key: str
     model: str = 'openai/gpt-4o-mini'
     temperature: float = 0.5
-    tokens: bool = True
+    chunking_method: str = 'tokens'
     chunk_size: int = 1500
     overlap: int = 300
     keyword_search_limit: int = 20
@@ -96,6 +96,7 @@ def main():
     config.model = st.sidebar.text_input("Model", config.model)
     config.temperature = st.sidebar.slider("Temperature", 0.0, 1.0, config.temperature)
     config.chunk_size = st.sidebar.number_input("Chunk Size", value=config.chunk_size)
+    config.chunking_method = st.sidebar.selectbox("Chunking Method", ["tokens", "text",'regax'])
     config.overlap = st.sidebar.number_input("Overlap", value=config.overlap)
     config.keyword_search_limit = st.sidebar.number_input("Keyword Search Limit", value=config.keyword_search_limit)
     config.rerank_limit = st.sidebar.number_input("Rerank Limit", value=config.rerank_limit)
@@ -169,7 +170,7 @@ def main():
 
             # Initialize RetrievalEngine
             update_intermediate("Initializing RetrievalEngine with fetched texts...")
-            retrieval = RetrievalEngine(dict_of_texts, tokens=config.tokens, chunk_size=config.chunk_size, overlap=config.overlap)
+            retrieval = RetrievalEngine(dict_of_texts, chunking_method=config.chunking_method, chunk_size=config.chunk_size, overlap=config.overlap)
 
             # Perform keyword search
             update_intermediate("Performing keyword search on the input query...")
