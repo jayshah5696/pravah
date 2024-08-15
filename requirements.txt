@@ -13,3 +13,4 @@ streamlit
 duckdb
 rank_bm25
 beautifulsoup4
+pypdf2

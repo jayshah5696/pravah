@@ -22,6 +22,7 @@ streamlit = "^1.37.1"
 duckdb = "^1.0.0"
 rank-bm25 = "^0.2.2"
 beautifulsoup4 = "^4.12.3"
+pypdf2 = "^3.0.1"
 
 
 [build-system]

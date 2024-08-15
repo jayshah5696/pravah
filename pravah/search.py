@@ -10,7 +10,8 @@ import aiohttp
 import asyncio
 import warnings
 from bs4 import MarkupResemblesLocatorWarning
-
+import PyPDF2
+import io
 warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 
 # load_dotenv()
@@ -19,7 +20,7 @@ warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 def search_query(query:str, api_key):
     tavily_client = TavilyClient(api_key=api_key)
     results = tavily_client.search(query,
-                               include_raw_content=True)
+                               include_raw_content=False)
     return results
 
 
@@ -44,22 +45,35 @@ PROXIES = {
 }
 
 async def fetch_content(url: str) -> str:
-    """Fetches the raw HTML content from a given URL asynchronously.
+    """Fetches the content from a given URL asynchronously.
 
     Args:
         url: The URL to fetch the content from.
     Returns:
-        The raw HTML content of the page, or an empty string if an error occurs.
+        The content of the page, or an empty string if an error occurs.
     """
-    # await asyncio.sleep(random.randint(2, 5))  # Simulate human-like behavior with random sleep durations
+    # ... existing code ...
     try:
         headers = {'User-Agent': random.choice(USER_AGENTS)}
         async with aiohttp.ClientSession() as session:
             async with session.get(url, headers=headers) as response:
                 response.raise_for_status()
-                return await response.text()
+                if url.endswith(".pdf"):
+                    # Handle PDF content
+                    content = await response.read()
+                    pdf_reader = PyPDF2.PdfReader(io.BytesIO(content))
+                    text = ""
+                    for page in range(len(pdf_reader.pages)):
+                        text += pdf_reader.pages[page].extract_text()
+                    return text
+                else:
+                    # Handle other content types as before
+                    return await response.text()
     except aiohttp.ClientError as e:
         print(f"An error occurred while fetching content from {url}: {e}")
+        return ''
+    except UnicodeDecodeError as e:
+        print(f"An error occurred while decoding content from {url}: {e}")
         return ''
 
 def parse_content(content: str) -> str:
