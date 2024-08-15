@@ -52,7 +52,7 @@ async def fetch_content(url: str) -> str:
     Returns:
         The content of the page, or an empty string if an error occurs.
     """
-    # ... existing code ...
+    # await asyncio.sleep(random.randint(2, 5))  # Simulate human-like behavior with random sleep durations
     try:
         headers = {'User-Agent': random.choice(USER_AGENTS)}
         async with aiohttp.ClientSession() as session:
