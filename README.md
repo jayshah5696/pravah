@@ -82,11 +82,14 @@ flowchart TD
     ```
 
 3. **Set up environment variables**:
-    Create a `.env` file in the root directory and add your API keys:
+    Create a `.env` file in the root directory and add your API keys. Depending on the models you wish to use, include the following keys:
     ```sh
     TVLY_API_KEY=your_tavily_api_key
     OPENAI_API_KEY=your_openai_api_key
+    COHERE_API_KEY=your_cohere_api_key  # Add this if you want to use Cohere models
+    ANTHROPIC_API_KEY=your_anthropic_api_key  # Add this if you want to use Anthropic models
     ```
+
 
 4. **Set up DuckDB**:
     DuckDB is used for storing chat history. Install DuckDB using the following commands based on your operating system:
