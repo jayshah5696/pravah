@@ -1,4 +1,4 @@
-# this code implements this taking inspiration from jina.ai
+# this code implements this taking inspiration from jina.ai 
 pattern_heading = r"(?:^(?:[#*=-]{1,6}|\w[^\r\n]{0,199}\r?\n[-=]+|<h[1-6][^>]{0,99}>)[^\r\n]{1,200}(?:</h[1-6]>)?(?:\r?\n|$))"
 pattern_items = r"(?:(?:^|\r?\n)[ \t]{0,3}(?:[-*+•]|\d{1,3}\.|\w\.|\[[ xX]\])[\t]+[^\r\n]{1,200}" \
                 r"(?:(?:\r?\n[ \t]{2,5}(?:[-*+•]|\d{1,3}\.|\w\.|\[[ xX]\])[ \t]+[^\r\n]{1,200}){0,5 }" \

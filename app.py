@@ -32,6 +32,8 @@ class Config:
     rerank_limit: int = 10
     rewrite_model: str = 'groq/llama-3.1-8b-instant'
     rewrite_model_temperature: float = 0.1
+    search_type: str = 'default' # or jina
+    markdown: bool = True
 
 config = Config(search_tvly_api_key=search_tvly_api_key)
 
@@ -75,7 +77,7 @@ def cached_search_query(query):
 # Fetch text from URL
 @lru_cache(maxsize=128)
 async def fetch_text(session, url):
-    return await get_text_from_url(url)
+    return await get_text_from_url(url, search_type=config.search_type, markdown=config.markdown)
 
 # Fetch all texts from URLs
 async def fetch_all_texts(urls):
@@ -102,6 +104,8 @@ def main():
     config.rerank_limit = st.sidebar.number_input("Rerank Limit", value=config.rerank_limit)
     config.rewrite_model = st.sidebar.text_input("Rewrite Model", config.rewrite_model)
     config.rewrite_model_temperature = st.sidebar.slider("Rewrite Model Temperature", 0.0, 1.0, config.rewrite_model_temperature)
+    config.search_type = st.sidebar.selectbox("Search Type", ["default", "jina"])
+    config.markdown = st.sidebar.checkbox("Markdown", value=config.markdown)
 
     # Chat input
     # Initialize chat history

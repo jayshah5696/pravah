@@ -12,6 +12,7 @@ import warnings
 from bs4 import MarkupResemblesLocatorWarning
 import PyPDF2
 import io
+import re
 warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 
 # load_dotenv()
@@ -44,6 +45,11 @@ PROXIES = {
     'https': 'https://your_proxy_server:port'
 }
 
+jina_api_key = os.environ['JINA_API_KEY']
+JINA_HEADERS = {
+    'Authorization': 'Bearer {}'.format(jina_api_key),
+    'X-Return-Format': 'markdown'
+}
 async def fetch_content(url: str) -> str:
     """Fetches the content from a given URL asynchronously.
 
@@ -75,28 +81,166 @@ async def fetch_content(url: str) -> str:
     except UnicodeDecodeError as e:
         print(f"An error occurred while decoding content from {url}: {e}")
         return ''
-
-def parse_content(content: str) -> str:
-    """Parses the HTML content to extract text.
+def parse_content(content: str, markdown: bool = False) -> str:
+    """Parses the HTML content to extract text and convert it to markdown format if enabled.
 
     Args:
         content: The raw HTML content.
+        markdown: A flag to indicate whether to convert to markdown format.
     Returns:
-        The text content of the page.
+        The text content of the page, or markdown formatted text if enabled.
     """
-    soup = BeautifulSoup(content, 'html.parser')
-    text = ' '.join([s.get_text(strip=True) for s in soup.find_all()])
-    return text
+    try:
+        soup = BeautifulSoup(content, 'html.parser')
 
-async def get_text_from_url(url: str) -> str:
+        if markdown:
+            # Handle headings
+            for heading in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+                try:
+                    heading.string = f"{'#' * int(heading.name[1:])} {heading.get_text(strip=True)}\n"
+                except Exception as e:
+                    print(f"Error handling heading: {e}")
+
+            # Handle paragraphs
+            for p in soup.find_all('p'):
+                try:
+                    p.string = f"{p.get_text(strip=True)}\n\n"
+                except Exception as e:
+                    print(f"Error handling paragraph: {e}")
+
+            # Handle links
+            for a in soup.find_all('a'):
+                try:
+                    if 'href' in a.attrs:  # Check if 'href' exists
+                        a.string = f"[{a.get_text(strip=True)}]({a['href']})"
+                except Exception as e:
+                    print(f"Error handling link: {e}")
+
+            # Handle bold and italic text
+            for strong in soup.find_all('strong'):
+                try:
+                    strong.string = f"**{strong.get_text(strip=True)}**"
+                except Exception as e:
+                    print(f"Error handling bold text: {e}")
+            for em in soup.find_all('em'):
+                try:
+                    em.string = f"*{em.get_text(strip=True)}*"
+                except Exception as e:
+                    print(f"Error handling italic text: {e}")
+
+            # Handle unordered lists
+            for ul in soup.find_all('ul'):
+                try:
+                    for li in ul.find_all('li'):
+                        li.string = f"- {li.get_text(strip=True)}\n"
+                except Exception as e:
+                    print(f"Error handling unordered list: {e}")
+
+            # Handle ordered lists
+            for ol in soup.find_all('ol'):
+                try:
+                    for i, li in enumerate(ol.find_all('li')):
+                        li.string = f"{i+1}. {li.get_text(strip=True)}\n"
+                except Exception as e:
+                    print(f"Error handling ordered list: {e}")
+
+            # Handle code blocks
+            for pre in soup.find_all('pre'):
+                try:
+                    pre.string = f"```\n{pre.get_text()}\n```"
+                except Exception as e:
+                    print(f"Error handling code block: {e}")
+
+            # Handle images
+            for img in soup.find_all('img'):
+                try:
+                    alt_text = img.get('alt', '')
+                    img.replace_with(f"![{alt_text}]({img['src']})")
+                except Exception as e:
+                    print(f"Error handling image: {e}")
+
+            # Remove empty tags
+            for tag in soup.find_all():
+                try:
+                    if not tag.get_text(strip=True):
+                        tag.decompose()
+                except Exception as e:
+                    print(f"Error removing empty tag: {e}")
+
+            # Get the final markdown text
+            markdown_text = soup.get_text()
+
+            # Clean up extra newlines
+            markdown_text = re.sub(r'\n{3,}', '\n\n', markdown_text)
+
+            return markdown_text
+
+        else:
+            # Default parsing to extract plain text
+            try:
+                text = ' '.join([s.get_text(strip=True) for s in soup.find_all()])
+                return text
+            except Exception as e:
+                print(f"Error during plain text extraction: {e}")
+                return ""
+
+    except Exception as e:
+        print(f"An error occurred during parsing: {e}")
+        for fallback in [fallback_to_plain_text, fallback_to_partial_markdown, fallback_to_simplified_parsing]:
+            try:
+                markdown_text = fallback(content)
+                print(f"Fallback successful using {fallback.__name__}.")
+                return markdown_text
+            except Exception as e:
+                print(f"Error during fallback {fallback.__name__}: {e}")
+        return ""
+    
+def fallback_to_plain_text(content):
+    soup = BeautifulSoup(content, 'html.parser')
+    return soup.get_text()
+
+def fallback_to_partial_markdown(content):
+    soup = BeautifulSoup(content, 'html.parser')
+    markdown_text = ""
+    for heading in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+        markdown_text += f"{'#' * int(heading.name[1:])} {heading.get_text(strip=True)}\n"
+    for p in soup.find_all('p'):
+        markdown_text += f"{p.get_text(strip=True)}\n\n"
+    return markdown_text
+
+def fallback_to_simplified_parsing(content):
+    soup = BeautifulSoup(content, 'html.parser')
+    markdown_text = ""
+    for element in soup.find_all():
+        if element.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p']:
+            markdown_text += f"{element.get_text(strip=True)}\n\n"
+    return markdown_text
+    
+
+async def get_text_from_url(url: str, search_type: str = 'default', markdown: bool = False) -> str:
     """Fetches and parses the text content from a given URL asynchronously.
 
     Args:
         url: The URL to fetch the content from.
+        search_type: The type of search to perform ('default' or 'jina').
+        markdown: A flag to indicate whether to convert to markdown format.
     Returns:
         The text content of the page, or an empty string if an error occurs.
     """
-    content = await fetch_content(url)
+    if search_type == 'jina':
+        headers = JINA_HEADERS  # Use the predefined JINA headers
+        content = await fetch_jina_content(url, headers)
+    else:
+        content = await fetch_content(url)
+
     if content:
-        return parse_content(content)
+        return parse_content(content, markdown) if search_type == 'default' else content
     return ''
+
+async def fetch_jina_content(url: str, headers: dict) -> str:
+
+    url = f'https://r.jina.ai/{url}'
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers=headers) as response:
+            response.raise_for_status()
+            return await response.text()
