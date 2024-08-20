@@ -26,7 +26,7 @@ With Pravāha, you can witness firsthand how search engines and LLMs work in har
 Pravāha is constantly evolving! We are actively working on exciting new features, including:
 
 * **Streaming Responses:** Experience real-time search results as they are generated. ✅
-* **Expanded Search Tool Support:** Integrate with more search providers for a wider range of sources.
+* **Expanded Search Tool Support:** Integrate with more search providers for a wider range of sources. ✅
 * **Persistent Storage with DuckDB:** Store and manage your search history and data locally. ✅
 * **Agentic RAG with LangGraph:** Explore the potential of agentic search and knowledge graphs. 
 * **Customizable RAG Templates:** Create and share your own RAG templates (YAML) for unique search experiences.
@@ -88,6 +88,8 @@ flowchart TD
     OPENAI_API_KEY=your_openai_api_key
     COHERE_API_KEY=your_cohere_api_key  # Add this if you want to use Cohere models
     ANTHROPIC_API_KEY=your_anthropic_api_key  # Add this if you want to use Anthropic models
+    JINA_API_KEY=your_jina_api_key  # Add this if you want to use Jina reader api
+    BRAVE_API_KEY=your_brave_api_key  # Add this if you want to use Brave search engine
     ```
 
 
