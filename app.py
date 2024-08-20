@@ -11,13 +11,15 @@ load_dotenv()
 from pravah.llm import completion_llm
 from pravah.prompts import generate_prompt_template, query_rewriter, extract_rewritten_prompt
 from pravah.retrieval import RetrievalEngine
-from pravah.search import search_query, get_text_from_url
+from pravah.search import search_query, get_text_from_url, search_query_brave, search_query_duckduckgo
 
 
 
 
 # Load API key from environment
 search_tvly_api_key = os.environ['TVLY_API_KEY']
+if search_tvly_api_key is None:
+    raise ValueError("Please set the TVLY_API_KEY environment variable")
 
 # Define configuration dataclass
 @dataclass
@@ -34,6 +36,7 @@ class Config:
     rewrite_model_temperature: float = 0.1
     search_type: str = 'default' # or jina
     markdown: bool = True
+    search_engine: str = 'tvly'
 
 config = Config(search_tvly_api_key=search_tvly_api_key)
 
@@ -72,7 +75,18 @@ with duckdb.connect(database='pravah.db') as conn:  # Use context manager for co
 # Cache search query
 @lru_cache(maxsize=128)
 def cached_search_query(query):
-    return search_query(query,api_key = config.search_tvly_api_key)
+    if config.search_engine == 'tvly':
+        return search_query(query, api_key=config.search_tvly_api_key)
+    elif config.search_engine == 'brave':
+        brave_api_key = os.environ['BRAVE_API_KEY'] 
+        if brave_api_key is None:
+            raise ValueError("Please set the BRAVE_API_KEY environment variable")
+        return asyncio.run(search_query_brave(query, api_key=brave_api_key))
+    elif config.search_engine == 'duckduckgo':
+        return asyncio.run(search_query_duckduckgo(query))
+    else:
+        raise ValueError("Unsupported search engine")
+
 
 # Fetch text from URL
 @lru_cache(maxsize=128)
@@ -106,7 +120,7 @@ def main():
     config.rewrite_model_temperature = st.sidebar.slider("Rewrite Model Temperature", 0.0, 1.0, config.rewrite_model_temperature)
     config.search_type = st.sidebar.selectbox("Search Type", ["default", "jina"])
     config.markdown = st.sidebar.checkbox("Markdown", value=config.markdown)
-
+    config.search_engine = st.sidebar.selectbox("Search Engine", ["tvly", "brave", "duckduckgo"])
     # Chat input
     # Initialize chat history
     if "messages" not in st.session_state:
