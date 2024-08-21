@@ -256,6 +256,7 @@ class RetrievalEngine:
     def chunk_regax(self, text, max_char_length=1000, overlap=0):
         matches = re.findall(combined_pattern, text, re.MULTILINE)
         chunks = []
+        current_chunk = ""    
         for match in matches:
             if len(match) > max_char_length:
                 # Split the match into smaller chunks
@@ -263,7 +264,15 @@ class RetrievalEngine:
                     chunk = match[i:i + max_char_length]
                     chunks.append(chunk)
             else:
-                chunks.append(match)
+                if len(current_chunk) + len(match) <= max_char_length:
+                    current_chunk += match
+                else:
+                    if current_chunk:
+                        chunks.append(current_chunk)
+                    current_chunk = match
+        
+        if current_chunk:
+            chunks.append(current_chunk)
         
         return chunks
 

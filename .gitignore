@@ -5,3 +5,4 @@
 *.db
 *.db.wal
 *.csv
+*temp/

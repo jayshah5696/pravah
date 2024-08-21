@@ -25,6 +25,7 @@ beautifulsoup4 = "^4.12.3"
 pypdf2 = "^3.0.1"
 duckduckgo-search = "^6.2.9"
 brave-search = "^0.2.0"
+streamlit-aggrid = "^1.0.5"
 
 
 [build-system]
