@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from dotenv import load_dotenv
 import os
 import uuid
+from rerankers import Reranker
 load_dotenv()
 from pravah.llm import completion_llm
 from pravah.prompts import generate_prompt_template, query_rewriter, extract_rewritten_prompt
@@ -37,6 +38,7 @@ class Config:
     search_type: str = 'default' # or jina
     markdown: bool = True
     search_engine: str = 'tvly'
+    reranker: str = 'cohere' # or flashrank
 
 config = Config(search_tvly_api_key=search_tvly_api_key)
 
@@ -109,18 +111,30 @@ def main():
 
     # Sidebar configuration
     st.sidebar.header("Configuration")
-    config.model = st.sidebar.text_input("Model", config.model)
-    config.temperature = st.sidebar.slider("Temperature", 0.0, 1.0, config.temperature)
-    config.chunk_size = st.sidebar.number_input("Chunk Size", value=config.chunk_size)
-    config.chunking_method = st.sidebar.selectbox("Chunking Method", ["tokens", "text",'regax'])
-    config.overlap = st.sidebar.number_input("Overlap", value=config.overlap)
-    config.keyword_search_limit = st.sidebar.number_input("Keyword Search Limit", value=config.keyword_search_limit)
-    config.rerank_limit = st.sidebar.number_input("Rerank Limit", value=config.rerank_limit)
-    config.rewrite_model = st.sidebar.text_input("Rewrite Model", config.rewrite_model)
-    config.rewrite_model_temperature = st.sidebar.slider("Rewrite Model Temperature", 0.0, 1.0, config.rewrite_model_temperature)
-    config.search_type = st.sidebar.selectbox("Search Type", ["default", "jina"])
-    config.markdown = st.sidebar.checkbox("Markdown", value=config.markdown)
-    config.search_engine = st.sidebar.selectbox("Search Engine", ["tvly", "brave", "duckduckgo"])
+
+    with st.sidebar.expander("Model Configuration", expanded=True):
+        config.model = st.text_input("Model", config.model)
+        config.temperature = st.slider("Temperature", 0.0, 1.0, config.temperature)
+
+    with st.sidebar.expander("Chunking Configuration", expanded=False):
+        config.chunk_size = st.number_input("Chunk Size", value=config.chunk_size)
+        config.chunking_method = st.selectbox("Chunking Method", ["tokens", "text", 'regex'])
+        config.overlap = st.number_input("Overlap", value=config.overlap)
+
+    with st.sidebar.expander("Search Configuration", expanded=False):
+        config.keyword_search_limit = st.number_input("Keyword Search Limit", value=config.keyword_search_limit)
+        config.rerank_limit = st.number_input("Rerank Limit", value=config.rerank_limit)
+        config.search_type = st.selectbox("Search Type", ["default", "jina"])
+        config.markdown = st.checkbox("Markdown", value=config.markdown)
+        config.search_engine = st.selectbox("Search Engine", ["tvly", "brave", "duckduckgo"])
+
+    with st.sidebar.expander("Rewrite Configuration", expanded=False):
+        config.rewrite_model = st.text_input("Rewrite Model", config.rewrite_model)
+        config.rewrite_model_temperature = st.slider("Rewrite Model Temperature", 0.0, 1.0, config.rewrite_model_temperature)
+
+    with st.sidebar.expander("Reranker Configuration", expanded=False):
+        config.reranker = st.selectbox("Reranker", ["cohere", "flashrank"])
+
     # Chat input
     # Initialize chat history
     if "messages" not in st.session_state:
@@ -188,7 +202,12 @@ def main():
 
             # Initialize RetrievalEngine
             update_intermediate("Initializing RetrievalEngine with fetched texts...")
-            retrieval = RetrievalEngine(dict_of_texts, chunking_method=config.chunking_method, chunk_size=config.chunk_size, overlap=config.overlap)
+            retrieval = RetrievalEngine(dict_of_texts,
+                                        chunking_method=config.chunking_method,
+                                        chunk_size=config.chunk_size,
+                                        overlap=config.overlap,
+                                        reranker=Reranker(config.reranker, lang='en', api_key=os.environ.get('COHERE_API_KEY') if config.reranker == 'cohere' else None)  # Use selected reranker
+                                        )
 
             # Perform keyword search
             update_intermediate("Performing keyword search on the input query...")

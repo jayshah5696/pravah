@@ -20,11 +20,11 @@ tavily-python = "0.3.5"
 rerankers = {extras = ["flashrank"], version = "^0.4.0"}
 streamlit = "^1.37.1"
 duckdb = "^1.0.0"
-rank-bm25 = "^0.2.2"
 beautifulsoup4 = "^4.12.3"
 pypdf2 = "^3.0.1"
 duckduckgo-search = "^6.2.9"
 brave-search = "^0.2.0"
+bm25s = {extras = ["full"], version = "^0.1.10"}
 
 
 [build-system]

@@ -21,9 +21,8 @@ warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 # api_key=os.environ['TVLY_API_KEY']
 
 def search_query(query:str, api_key, num_results=5):
-    tavily_client = TavilyClient(api_key=api_key, max_results=num_results)
-    results = tavily_client.search(query,
-                               include_raw_content=False)
+    tavily_client = TavilyClient(api_key=api_key)
+    results = tavily_client.search(query,include_raw_content=False,max_results=num_results)
     return results
 
 async def search_query_brave(query, api_key, num_results=5):

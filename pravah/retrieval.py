@@ -1,7 +1,8 @@
 import os
 import asyncio
 import numpy as np
-from rank_bm25 import BM25Okapi
+from bm25s import BM25  # Updated import
+import bm25s
 from typing import List
 import faiss
 import fastavro
@@ -106,7 +107,7 @@ class RetrievalEngine:
         return chunks
 
     def chunk_text_by_tokens(self, text, max_token_length=100, overlap=0):
-        enc = tiktoken.get_encoding("cl100k_base")
+        enc = tiktoken.get_encoding("o200k_base")
         tokens = enc.encode(text,disallowed_special=())
         chunks = []
 
@@ -118,8 +119,11 @@ class RetrievalEngine:
         return chunks
 
     def create_bm25(self):
-        tokenized_chunks = [chunk['content'].split() for chunk in self.chunks]
-        return BM25Okapi(tokenized_chunks)
+        tokenized_chunks = bm25s.tokenize([chunk['content'] for chunk in self.chunks])
+
+        bm25 = BM25()
+        bm25.index(tokenized_chunks)
+        return bm25
 
     @lru_cache(maxsize=128)
     async def create_embeddings(self):
@@ -152,17 +156,15 @@ class RetrievalEngine:
 
     @lru_cache(maxsize=128)
     async def keyword_search(self, query: str, top_k: int = 5) -> List[dict]:
-        # Get BM25 scores for the query
-        scores = self.bm25.get_scores(query.split())
-        # Get indices of top_k scores in descending order
-        top_indices = np.argsort(scores)[-top_k:][::-1]
-        # Return the chunks corresponding to the top indices
-        return [self.chunks[i] for i in top_indices]
+        query_tokens = bm25s.tokenize(query)
+        docs, scores = self.bm25.retrieve(query_tokens, k=top_k)
+        return [self.chunks[doc_id] for doc_id in docs[0]]
 
     @lru_cache(maxsize=128)
     async def combined_search(self, query: str, top_k: int = 5, alpha: float = 0.5) -> List[dict]:
-        keyword_scores = self.bm25.get_scores(query.split())
-        keyword_scores = self.normalize_scores(keyword_scores)  # Normalize keyword scores
+        query_tokens = bm25s.tokenize(query)
+        keyword_docs, keyword_scores = self.bm25.retrieve(query_tokens, k=len(self.chunks))
+        keyword_scores = self.normalize_scores(keyword_scores[0])  # Normalize keyword scores
         distances, indices = await self.semantic_query_run(query, len(self.chunks))
         semantic_scores = np.zeros(len(self.chunks))  # Initialize semantic scores
         semantic_scores[indices[0]] = 1 / (1 + distances[0])  # Calculate semantic scores
@@ -193,11 +195,7 @@ class RetrievalEngine:
         faiss.write_index(self.index, file_path)
 
     async def save_bm25_index_avro(self, file_path: str):
-        """Save the BM25 index to an Avro file.
-        
-        Args:
-            file_path (str): The path to the file where the index will be saved.
-        """
+        """Save the BM25 index to an Avro file."""
         schema = {
             "type": "record",
             "name": "BM25Index",
@@ -218,15 +216,11 @@ class RetrievalEngine:
             fastavro.writer(f, schema, [bm25_data])
 
     async def load_bm25_index_avro(self, file_path: str):
-        """Load the BM25 index from an Avro file.
-        
-        Args:
-            file_path (str): The path to the file from which the index will be loaded.
-        """
+        """Load the BM25 index from an Avro file."""
         with open(file_path, 'rb') as f:
             reader = fastavro.reader(f)
             bm25_data = next(reader)
-        self.bm25 = BM25Okapi([])
+        self.bm25 = BM25(corpus=[])  # Initialize an empty BM25
         self.bm25.doc_freqs = bm25_data['doc_freqs']
         self.bm25.idf = bm25_data['idf']
         self.bm25.doc_len = bm25_data['doc_len']
@@ -256,6 +250,7 @@ class RetrievalEngine:
     def chunk_regax(self, text, max_char_length=1000, overlap=0):
         matches = re.findall(combined_pattern, text, re.MULTILINE)
         chunks = []
+        current_chunk = ""    
         for match in matches:
             if len(match) > max_char_length:
                 # Split the match into smaller chunks
@@ -263,9 +258,16 @@ class RetrievalEngine:
                     chunk = match[i:i + max_char_length]
                     chunks.append(chunk)
             else:
-                chunks.append(match)
+                if len(current_chunk) + len(match) <= max_char_length:
+                    current_chunk += match
+                else:
+                    if current_chunk:
+                        chunks.append(current_chunk)
+                    current_chunk = match
+        
+        if current_chunk:
+            chunks.append(current_chunk)
         
         return chunks
-
         
     

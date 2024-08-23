@@ -11,7 +11,7 @@ rerankers[api]
 rerankers[flashrank]
 streamlit
 duckdb
-rank_bm25
+bm25s[full]
 beautifulsoup4
 pypdf2
 duckduckgo_search
