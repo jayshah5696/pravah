@@ -1,11 +1,12 @@
-# Use Python 3.11 as the base image
-FROM python:3.11-slim
+# Use a multi-stage build to reduce the final image size
+# Stage 1: Build stage
+FROM python:3.11-slim as builder
 
 # Set the working directory in the container
 WORKDIR /app
 
 # Install system dependencies and Poetry
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     && rm -rf /var/lib/apt/lists/* \
@@ -17,6 +18,16 @@ COPY pyproject.toml poetry.lock ./
 
 # Install Python dependencies using Poetry
 RUN poetry config virtualenvs.create false && poetry install --no-dev
+
+# Stage 2: Final stage
+FROM python:3.11-slim
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy the installed dependencies from the builder stage
+COPY --from=builder /usr/local /usr/local
+COPY --from=builder /root/.local /root/.local
 
 # Copy the rest of the application code
 COPY app.py .
