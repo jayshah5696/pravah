@@ -5,19 +5,21 @@ FROM python:3.11-slim as builder
 # Set the working directory in the container
 WORKDIR /app
 
-# Install system dependencies and Poetry
+# Install system dependencies and curl
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && curl -sSL https://install.python-poetry.org | python3 - \
-    && ln -s /root/.local/bin/poetry /usr/local/bin/poetry
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy the pyproject.toml and poetry.lock files
-COPY pyproject.toml poetry.lock ./
+# Install uv
+ADD --chmod=755 https://astral.sh/uv/install.sh /install.sh
+RUN /install.sh && rm /install.sh
 
-# Install Python dependencies using Poetry
-RUN poetry config virtualenvs.create false && poetry install --no-dev
+# Copy the requirements.txt file
+COPY requirements.txt ./
+
+# Install Python dependencies using uv
+RUN /root/.cargo/bin/uv pip install --system --no-cache -r requirements.txt
 
 # Stage 2: Final stage
 FROM python:3.11-slim
@@ -27,7 +29,7 @@ WORKDIR /app
 
 # Copy the installed dependencies from the builder stage
 COPY --from=builder /usr/local /usr/local
-COPY --from=builder /root/.local /root/.local
+COPY --from=builder /root/.cargo /root/.cargo
 
 # Copy the rest of the application code
 COPY app.py .
@@ -37,4 +39,4 @@ COPY pravah/ ./pravah/
 EXPOSE 8501
 
 # Set the command to run the Streamlit app
-CMD ["poetry", "run", "streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
