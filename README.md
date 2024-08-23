@@ -64,13 +64,20 @@ flowchart TD
 
 ## Getting Started
 
-1. **Clone the repository**:
+1. **Run with Docker (Recommended)**:
+    If you prefer not to install dependencies manually, you can use Docker:
+    ```sh
+    docker pull jayshaha5696/pravah
+    docker run -p 8501:8501 -v $(pwd):/app pravaha
+    ```
+
+2. **Clone the repository** (if you want to install manually):
     ```sh
     git clone https://github.com/jayshah5696/pravaha.git
     cd pravaha
     ```
 
-2. **Install dependencies**:
+3. **Install dependencies**:
     - Using `pip`:
         ```sh
         pip install -r requirements.txt
@@ -81,7 +88,7 @@ flowchart TD
         poetry shell
     ```
 
-3. **Set up environment variables**:
+4. **Set up environment variables**:
     Create a `.env` file in the root directory and add your API keys. Depending on the models you wish to use, include the following keys:
     ```sh
     TVLY_API_KEY=your_tavily_api_key
@@ -92,8 +99,7 @@ flowchart TD
     BRAVE_API_KEY=your_brave_api_key  # Add this if you want to use Brave search engine
     ```
 
-
-4. **Set up DuckDB**:
+5. **Set up DuckDB**:
     DuckDB is used for storing chat history. Install DuckDB using the following commands based on your operating system:
 
     - **macOS**:
@@ -113,7 +119,7 @@ flowchart TD
 
     For more installation options, visit the [DuckDB Installation Guide](https://duckdb.org/docs/installation/).
 
-5. **Run the Streamlit application**:
+6. **Run the Streamlit application**:
     ```sh
     streamlit run app.py
     ```
@@ -140,5 +146,7 @@ Manages text chunking, embedding, and retrieval using BM25 and FAISS. Includes r
 We welcome contributions to Pravāha! Please feel free to submit issues, feature requests, or pull requests to help improve the project.
 
 ## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details or visit [MIT License](https://opensource.org/licenses/MIT).
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details or visit [MIT License](https://opensource.org/licenses/MIT).
