@@ -4,7 +4,7 @@ import aiohttp
 import duckdb
 from functools import lru_cache
 from dataclasses import dataclass
-from dotenv import load_dotenv
+from dotenv import load_dotenv,set_key
 import os
 import uuid
 from rerankers import Reranker
@@ -42,7 +42,84 @@ class Config:
 
 config = Config(search_tvly_api_key=search_tvly_api_key)
 
-# Initialize DuckDB connection
+def update_env_file(key, value):
+    env_path = os.path.join(os.path.dirname(__file__), '.env')
+    set_key(env_path, key, value)
+    os.environ[key] = value
+
+def check_model_key(model):
+    if 'openai' in model.lower():
+        return 'OPENAI_API_KEY'
+    elif 'anthropic' in model.lower():
+        return 'ANTHROPIC_API_KEY'
+    elif 'groq' in model.lower():
+        return 'GROQ_API_KEY'
+    elif 'cohere' in model.lower():
+        return 'COHERE_API_KEY'
+    return None
+
+def check_api_keys(config):
+    required_keys = []
+    if config.search_engine == 'tvly':
+        required_keys.append('TVLY_API_KEY')
+    elif config.search_engine == 'brave':
+        required_keys.append('BRAVE_API_KEY')
+
+    # Check API keys for both model and rewrite_model
+    for model in [config.model, config.rewrite_model]:
+        key = check_model_key(model)
+        if key:
+            required_keys.append(key)
+    
+    if config.reranker == 'cohere':
+        required_keys.append('COHERE_API_KEY')
+    
+    if config.search_type == 'jina':
+        required_keys.append('JINA_API_KEY')
+
+    missing_keys = [key for key in required_keys if not os.environ.get(key)]
+
+    if missing_keys:
+        st.warning("Some required API keys are missing. Please enter them below:")
+        for key in missing_keys:
+            value = st.text_input(f"Enter {key}", type="password")
+            if value:
+                update_env_file(key, value)
+        
+        if st.button("Save API Keys"):
+            st.success("API keys saved successfully. Please restart the app.")
+            st.stop()
+
+def setup_config_and_check_api_keys():
+    st.sidebar.header("Configuration")
+
+    with st.sidebar.expander("Model Configuration", expanded=True):
+        config.model = st.text_input("Model", config.model, key='model_input')
+        config.temperature = st.slider("Temperature", 0.0, 1.0, config.temperature, key='temperature_slider')
+
+    with st.sidebar.expander("Chunking Configuration", expanded=False):
+        config.chunk_size = st.number_input("Chunk Size", value=config.chunk_size, key='chunk_size_input')
+        config.chunking_method = st.selectbox("Chunking Method", ["tokens", "text", 'regex'], key='chunking_method_select')
+        config.overlap = st.number_input("Overlap", value=config.overlap, key='overlap_input')
+
+    with st.sidebar.expander("Search Configuration", expanded=False):
+        config.keyword_search_limit = st.number_input("Keyword Search Limit", value=config.keyword_search_limit, key='keyword_search_limit_input')
+        config.rerank_limit = st.number_input("Rerank Limit", value=config.rerank_limit, key='rerank_limit_input')
+        config.search_type = st.selectbox("Search Type", ["default", "jina"], key='search_type_select')
+        config.markdown = st.checkbox("Markdown", value=config.markdown, key='markdown_checkbox')
+        config.search_engine = st.selectbox("Search Engine", ["duckduckgo", "brave", "tvly"], key='search_engine_select')
+
+    with st.sidebar.expander("Rewrite Configuration", expanded=False):
+        config.rewrite_model = st.text_input("Rewrite Model", config.rewrite_model, key='rewrite_model_input')
+        config.rewrite_model_temperature = st.slider("Rewrite Model Temperature", 0.0, 1.0, config.rewrite_model_temperature, key='rewrite_model_temperature_slider')
+
+    with st.sidebar.expander("Reranker Configuration", expanded=False):
+        config.reranker = st.selectbox("Reranker", ["cohere", "flashrank"], key='reranker_select')
+
+    # Check for required API keys based on configuration
+    check_api_keys(config)
+
+    return config
 
 def create_tables(conn):
     # Create tables without explicit transaction management
@@ -105,35 +182,37 @@ async def fetch_all_texts(urls):
 def display_intermediate_result(message):
     with st.empty():
         st.info(message)
+
 # Main Streamlit app
 def main():
+    st.set_page_config(page_title="Pravaha", page_icon=":ocean:", layout="wide")
+    # Add custom CSS
+    st.markdown(
+        """
+        <style>
+        .css-18e3th9 {
+            padding-top: 2rem;
+        }
+        .css-1d391kg {
+            padding-top: 2rem;
+        }
+        .css-1v3fvcr {
+            padding-top: 2rem;
+        }
+        .css-1cpxqw2 {
+            padding-top: 2rem;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Add logo/image
+    st.image("assets/pravha.png", width=200)  # Update the path to your logo
+
     st.title("Pravaha")
-
-    # Sidebar configuration
-    st.sidebar.header("Configuration")
-
-    with st.sidebar.expander("Model Configuration", expanded=True):
-        config.model = st.text_input("Model", config.model)
-        config.temperature = st.slider("Temperature", 0.0, 1.0, config.temperature)
-
-    with st.sidebar.expander("Chunking Configuration", expanded=False):
-        config.chunk_size = st.number_input("Chunk Size", value=config.chunk_size)
-        config.chunking_method = st.selectbox("Chunking Method", ["tokens", "text", 'regex'])
-        config.overlap = st.number_input("Overlap", value=config.overlap)
-
-    with st.sidebar.expander("Search Configuration", expanded=False):
-        config.keyword_search_limit = st.number_input("Keyword Search Limit", value=config.keyword_search_limit)
-        config.rerank_limit = st.number_input("Rerank Limit", value=config.rerank_limit)
-        config.search_type = st.selectbox("Search Type", ["default", "jina"])
-        config.markdown = st.checkbox("Markdown", value=config.markdown)
-        config.search_engine = st.selectbox("Search Engine", ["tvly", "brave", "duckduckgo"])
-
-    with st.sidebar.expander("Rewrite Configuration", expanded=False):
-        config.rewrite_model = st.text_input("Rewrite Model", config.rewrite_model)
-        config.rewrite_model_temperature = st.slider("Rewrite Model Temperature", 0.0, 1.0, config.rewrite_model_temperature)
-
-    with st.sidebar.expander("Reranker Configuration", expanded=False):
-        config.reranker = st.selectbox("Reranker", ["cohere", "flashrank"])
+    # Setup configuration and check API keys
+    config = setup_config_and_check_api_keys()
 
     # Chat input
     # Initialize chat history
