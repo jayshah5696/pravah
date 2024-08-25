@@ -1,6 +1,6 @@
 # Use a multi-stage build to reduce the final image size
 # Stage 1: Build stage
-FROM python:3.11-slim as builder
+FROM --platform=$BUILDPLATFORM python:3.11-slim as builder
 
 # Set the working directory in the container
 WORKDIR /app
@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install uv
 ADD --chmod=755 https://astral.sh/uv/install.sh /install.sh
-RUN /install.sh && rm /install.sh
+RUN chmod +x /install.sh && /install.sh && rm /install.sh
 
 # Copy the requirements.txt file
 COPY requirements.txt ./
@@ -22,7 +22,7 @@ COPY requirements.txt ./
 RUN /root/.cargo/bin/uv pip install --system --no-cache -r requirements.txt
 
 # Stage 2: Final stage
-FROM python:3.11-slim
+FROM --platform=$TARGETPLATFORM python:3.11-slim
 
 # Set the working directory in the container
 WORKDIR /app

@@ -145,6 +145,13 @@ Manages text chunking, embedding, and retrieval using BM25 and FAISS. Includes r
 
 We welcome contributions to Pravāha! Please feel free to submit issues, feature requests, or pull requests to help improve the project.
 
+```
+docker buildx version
+docker buildx inspect --bootstrap
+docker buildx create --use
+docker buildx build --platform linux/arm64,linux/amd64,linux/amd64/v2,linux/ppc64le,linux/s390x,linux/386,linux/arm/v7,linux/arm/v6 -t jayshaha5696/pravah:latest --push .
+```
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details or visit [MIT License](https://opensource.org/licenses/MIT).
