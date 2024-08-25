@@ -6,7 +6,6 @@ import bm25s
 from typing import List
 import faiss
 import fastavro
-# from fastavro.schema import load_schema
 from dotenv import load_dotenv
 import tiktoken
 import re
@@ -16,6 +15,13 @@ from functools import lru_cache
 from cachetools import LRUCache, cached  
 from cachetools.keys import hashkey  
 from .regax_pattern import combined_pattern
+from functools import lru_cache
+import lancedb
+from lancedb.pydantic import LanceModel, Vector
+from lancedb.embeddings import OpenAIEmbeddings
+import uuid
+
+load_dotenv()
 
 class LiteLLMEmbeddingClient:
     def __init__(self, model: str, api_key: str):
@@ -34,24 +40,34 @@ class LiteLLMEmbeddingClient:
 
 class RetrievalEngine:
     def __init__(self, texts: List[dict],
+                 uuid_input: str,
                 chunk_size: int = 500,
                 overlap: int = 100,
                 chunking_method: str = 'tokens',
+                tokens: bool = False,
+                use_lancedb: bool = False,
                 embed_client = LiteLLMEmbeddingClient(model= "text-embedding-3-small",
                                                       api_key=os.environ['OPENAI_API_KEY']),
                 reranker = Reranker('flashrank')):
         self.chunk_size = chunk_size
         self.overlap = overlap
-        self.chunking_method = chunking_method 
-        self.chunks = self.chunk_texts(texts)
-        self.bm25 = self.create_bm25()
+        self.tokens = tokens
+        self.use_lancedb = use_lancedb
+        self.chunking_method = chunking_method
+        self.chunks = self.chunk_texts(texts,uuid_input=uuid_input)
         self.embed_client = embed_client
         self.embeddings = None
         self.index = None
-        self.reranker = reranker
-        
 
-    def chunk_texts(self, texts: List[dict]) -> List[dict]:
+        if self.use_lancedb:
+            self.lancedb = lancedb.connect(".my_db")
+            self.tbl = self.create_lancedb_table()
+            self.add_chunks_to_lancedb()
+        else:
+            self.bm25 = self.create_bm25()
+            self.reranker = reranker
+
+    def chunk_texts(self, texts: List[dict], uuid_input: str) -> List[dict]:
         chunks = []
         for item in texts:
             text = item['content']
@@ -63,7 +79,7 @@ class RetrievalEngine:
             else:  # And this line
                 chunked_texts = self.chunk_text(text, self.chunk_size, self.overlap)
             for chunk in chunked_texts:
-                chunks.append({'content': chunk, 'url': url})
+                chunks.append({'content': chunk, 'url': url, 'uuid': uuid_input})
         return chunks
 
     def chunk_text(self, text, max_char_length=1000, overlap=0):
@@ -156,21 +172,30 @@ class RetrievalEngine:
 
     @lru_cache(maxsize=128)
     async def keyword_search(self, query: str, top_k: int = 5) -> List[dict]:
-        query_tokens = bm25s.tokenize(query)
-        docs, scores = self.bm25.retrieve(query_tokens, k=top_k)
-        return [self.chunks[doc_id] for doc_id in docs[0]]
+        if self.use_lancedb:
+            return await self.lancedb_keyword_search(query, top_k)
+        else:
+            # Get BM25 scores for the query
+            query_tokens = bm25s.tokenize(query)
+            docs, scores = self.bm25.retrieve(query_tokens, k=top_k)
+            return [self.chunks[doc_id] for doc_id in docs[0]]
+
 
     @lru_cache(maxsize=128)
     async def combined_search(self, query: str, top_k: int = 5, alpha: float = 0.5) -> List[dict]:
-        query_tokens = bm25s.tokenize(query)
-        keyword_docs, keyword_scores = self.bm25.retrieve(query_tokens, k=len(self.chunks))
-        keyword_scores = self.normalize_scores(keyword_scores[0])  # Normalize keyword scores
-        distances, indices = await self.semantic_query_run(query, len(self.chunks))
-        semantic_scores = np.zeros(len(self.chunks))  # Initialize semantic scores
-        semantic_scores[indices[0]] = 1 / (1 + distances[0])  # Calculate semantic scores
-        combined_scores = alpha * keyword_scores + (1 - alpha) * semantic_scores  # Combine scores
-        top_indices = np.argsort(combined_scores)[-top_k:][::-1]  # Get top indices
-        return [self.chunks[i] for i in top_indices]
+        if self.use_lancedb:
+            return await self.lancedb_combined_search(query, top_k)
+        else:
+            query_tokens = bm25s.tokenize(query)
+            keyword_docs, keyword_scores = self.bm25.retrieve(query_tokens, k=len(self.chunks))
+            keyword_scores = self.normalize_scores(keyword_scores[0])  # Normalize keyword scores
+            distances, indices = await self.semantic_query_run(query, len(self.chunks))
+            semantic_scores = np.zeros(len(self.chunks))  # Initialize semantic scores
+            semantic_scores[indices[0]] = 1 / (1 + distances[0])  # Calculate semantic scores
+            combined_scores = alpha * keyword_scores + (1 - alpha) * semantic_scores  # Combine scores
+            top_indices = np.argsort(combined_scores)[-top_k:][::-1]  # Get top indices
+            return [self.chunks[i] for i in top_indices]
+
     
     def normalize_scores(self, scores: np.ndarray) -> np.ndarray:
         """Normalize an array of scores to a range between 0 and 1.
@@ -195,7 +220,11 @@ class RetrievalEngine:
         faiss.write_index(self.index, file_path)
 
     async def save_bm25_index_avro(self, file_path: str):
-        """Save the BM25 index to an Avro file."""
+        """Save the BM25 index to an Avro file.
+        
+        Args:
+            file_path (str): The path to the file where the index will be saved.
+        """
         schema = {
             "type": "record",
             "name": "BM25Index",
@@ -216,7 +245,11 @@ class RetrievalEngine:
             fastavro.writer(f, schema, [bm25_data])
 
     async def load_bm25_index_avro(self, file_path: str):
-        """Load the BM25 index from an Avro file."""
+        """Load the BM25 index from an Avro file.
+        
+        Args:
+            file_path (str): The path to the file from which the index will be loaded.
+        """
         with open(file_path, 'rb') as f:
             reader = fastavro.reader(f)
             bm25_data = next(reader)
@@ -270,4 +303,36 @@ class RetrievalEngine:
         
         return chunks
         
-    
+    def create_lancedb_table(self):
+        model = OpenAIEmbeddings(name='text-embedding-3-small')
+        class Document(LanceModel):
+            content: str = model.SourceField()
+            vector: Vector(1536) = model.VectorField()
+            url: str
+            uuid: str
+
+        return self.lancedb.create_table("pravah_chunks", schema=Document, mode="overwrite")
+
+    def add_chunks_to_lancedb(self):
+        self.tbl.add(self.chunks)
+        self.tbl.create_fts_index("content",replace=True)
+
+    async def lancedb_keyword_search(self, query: str, top_k: int = 5) -> List[dict]:
+        results = self.tbl.search(query, query_type='fts').limit(top_k).to_list()
+        return results
+
+    async def lancedb_semantic_search(self, query: str, top_k: int = 5) -> List[dict]:
+        results = self.tbl.search(query, query_type='vector').limit(top_k).to_list()
+        return results
+
+    async def lancedb_hybrid_search(self, query: str, top_k: int = 5) -> List[dict]:
+        results = self.tbl.search(query, query_type='hybrid').limit(top_k).to_list()
+        return results
+
+    async def lancedb_combined_search(self, query: str, top_k: int = 5) -> List[dict]:
+        from lancedb.rerankers import CohereReranker
+        reranker = CohereReranker(column='content')
+        results = (self.tbl.search(query, query_type='hybrid')
+                   .limit(top_k)
+                   .rerank(reranker=reranker))
+        return results.to_list()

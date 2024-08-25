@@ -6,3 +6,4 @@
 *.db.wal
 *.csv
 .DS_Store
+*my_db/

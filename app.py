@@ -11,7 +11,7 @@ from rerankers import Reranker
 load_dotenv()
 from pravah.llm import completion_llm
 from pravah.prompts import generate_prompt_template, query_rewriter, extract_rewritten_prompt
-from pravah.retrieval import RetrievalEngine
+from pravah.retrieval import RetrievalEngine, LiteLLMEmbeddingClient
 from pravah.search import search_query, get_text_from_url, search_query_brave, search_query_duckduckgo
 
 
@@ -108,6 +108,7 @@ def setup_config_and_check_api_keys():
         config.search_type = st.selectbox("Search Type", ["default", "jina"], key='search_type_select')
         config.markdown = st.checkbox("Markdown", value=config.markdown, key='markdown_checkbox')
         config.search_engine = st.selectbox("Search Engine", ["duckduckgo", "brave", "tvly"], key='search_engine_select')
+        config.use_lancedb = st.checkbox("Use LanceDB", value=False, key='use_lancedb_checkbox')
 
     with st.sidebar.expander("Rewrite Configuration", expanded=False):
         config.rewrite_model = st.text_input("Rewrite Model", config.rewrite_model, key='rewrite_model_input')
@@ -282,20 +283,24 @@ def main():
             # Initialize RetrievalEngine
             update_intermediate("Initializing RetrievalEngine with fetched texts...")
             retrieval = RetrievalEngine(dict_of_texts,
+                                        uuid_input=str(conversation_uuid),
                                         chunking_method=config.chunking_method,
                                         chunk_size=config.chunk_size,
                                         overlap=config.overlap,
-                                        reranker=Reranker(config.reranker, lang='en', api_key=os.environ.get('COHERE_API_KEY') if config.reranker == 'cohere' else None)  # Use selected reranker
+                                        use_lancedb=config.use_lancedb,  # Use LanceDB if selected
+                                        embed_client=LiteLLMEmbeddingClient(model=config.model, api_key=os.environ.get('OPENAI_API_KEY'))
                                         )
 
             # Perform keyword search
-            update_intermediate("Performing keyword search on the input query...")
-            context_keyword = asyncio.run(retrieval.keyword_search(prompt, config.keyword_search_limit))
+            # update_intermediate("Performing keyword search on the input query...")
+            # context_keyword = asyncio.run(retrieval.keyword_search(prompt, config.keyword_search_limit))
 
-            # Rank the context
-            update_intermediate('Ranking the context...')
-            context_reranker = asyncio.run(retrieval.rerank_chunks(prompt, context_keyword, config.rerank_limit))
-                
+            # # Rank the context
+            # update_intermediate('Ranking the context...')
+            # context_reranker = asyncio.run(retrieval.rerank_chunks(prompt, context_keyword, config.rerank_limit))
+            
+            context_reranker = asyncio.run(retrieval.combined_search(prompt, config.rerank_limit))
+            context_keyword=[]
             # Generate prompt template
             update_intermediate("Generating prompt template...")
             prompt_template = generate_prompt_template(prompt, context_reranker, extra_context={'search_query': re_written_prompt})

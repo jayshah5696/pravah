@@ -25,6 +25,8 @@ pypdf2 = "^3.0.1"
 duckduckgo-search = "^6.2.9"
 brave-search = "^0.2.0"
 bm25s = {extras = ["full"], version = "^0.1.10"}
+lancedb = "^0.12.0"
+tantivy = "^0.22.0"
 
 
 [build-system]

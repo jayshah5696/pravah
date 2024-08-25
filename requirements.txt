@@ -16,3 +16,5 @@ beautifulsoup4
 pypdf2
 duckduckgo_search
 brave-search
+lancedb
+tantivy
