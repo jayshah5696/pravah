@@ -282,15 +282,19 @@ def main():
 
             # Initialize RetrievalEngine
             update_intermediate("Initializing RetrievalEngine with fetched texts...")
-            retrieval = RetrievalEngine(dict_of_texts,
-                                        uuid_input=str(conversation_uuid),
-                                        chunking_method=config.chunking_method,
-                                        chunk_size=config.chunk_size,
-                                        overlap=config.overlap,
-                                        use_lancedb=config.use_lancedb,  # Use LanceDB if selected
-                                        embed_client=LiteLLMEmbeddingClient(model=config.model, api_key=os.environ.get('OPENAI_API_KEY'))
-                                        )
-
+            retrieval = RetrievalEngine(
+                dict_of_texts,
+                uuid_input=str(conversation_uuid),
+                chunking_method=config.chunking_method,
+                chunk_size=config.chunk_size,
+                overlap=config.overlap,
+                use_lancedb=config.use_lancedb, 
+                reranker=Reranker(
+                    config.reranker, 
+                    lang='en', 
+                    api_key=os.environ.get('COHERE_API_KEY') if config.reranker == 'cohere' else None
+                )
+            ) 
             # Perform keyword search
             # update_intermediate("Performing keyword search on the input query...")
             # context_keyword = asyncio.run(retrieval.keyword_search(prompt, config.keyword_search_limit))

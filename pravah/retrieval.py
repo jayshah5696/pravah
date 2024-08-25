@@ -40,28 +40,28 @@ class LiteLLMEmbeddingClient:
 
 class RetrievalEngine:
     def __init__(self, texts: List[dict],
-                 uuid_input: str,
+                uuid_input: str,
                 chunk_size: int = 500,
                 overlap: int = 100,
                 chunking_method: str = 'tokens',
                 tokens: bool = False,
                 use_lancedb: bool = False,
                 embed_client = LiteLLMEmbeddingClient(model= "text-embedding-3-small",
-                                                      api_key=os.environ['OPENAI_API_KEY']),
+                                                    api_key=os.environ['OPENAI_API_KEY']),
                 reranker = Reranker('flashrank')):
         self.chunk_size = chunk_size
         self.overlap = overlap
         self.tokens = tokens
         self.use_lancedb = use_lancedb
         self.chunking_method = chunking_method
-        self.chunks = self.chunk_texts(texts,uuid_input=uuid_input)
+        self.chunks = self.chunk_texts(texts, uuid_input=uuid_input)
         self.embed_client = embed_client
         self.embeddings = None
         self.index = None
 
         if self.use_lancedb:
             self.lancedb = lancedb.connect(".my_db")
-            self.tbl = self.create_lancedb_table()
+            self.tbl = asyncio.run(self.create_lancedb_table())  # Use asyncio.run to call the async function
             self.add_chunks_to_lancedb()
         else:
             self.bm25 = self.create_bm25()
@@ -303,15 +303,19 @@ class RetrievalEngine:
         
         return chunks
         
-    def create_lancedb_table(self):
-        model = OpenAIEmbeddings(name='text-embedding-3-small')
+    async def create_lancedb_table(self):
+        model = OpenAIEmbeddings(name='text-embedding-3-small',dim=1536)
         class Document(LanceModel):
             content: str = model.SourceField()
             vector: Vector(1536) = model.VectorField()
             url: str
             uuid: str
 
-        return self.lancedb.create_table("pravah_chunks", schema=Document, mode="overwrite")
+        table_mode = "append" if "pravah_chunks" in self.lancedb.table_names() else "create"
+        if table_mode=='create':
+            return await self.lancedb.create_table("pravah_chunks", schema=Document)
+        else:
+            return self.lancedb.open_table("pravah_chunks")
 
     def add_chunks_to_lancedb(self):
         self.tbl.add(self.chunks)
