@@ -20,7 +20,7 @@ import lancedb
 from lancedb.pydantic import LanceModel, Vector
 from lancedb.embeddings import OpenAIEmbeddings
 import uuid
-
+from langsmith import traceable, Client
 load_dotenv()
 
 class LiteLLMEmbeddingClient:
@@ -38,6 +38,7 @@ class LiteLLMEmbeddingClient:
     async def embed_query(self, query: str) -> List[float]:
         return await self.embed_document(query)
 
+@traceable
 class RetrievalEngine:
     def __init__(self, texts: List[dict],
                 uuid_input: str,
@@ -80,6 +81,7 @@ class RetrievalEngine:
                 chunked_texts = self.chunk_text(text, self.chunk_size, self.overlap)
             for chunk in chunked_texts:
                 chunks.append({'content': chunk, 'url': url, 'uuid': uuid_input})
+        self.uuid_input = uuid_input
         return chunks
 
     def chunk_text(self, text, max_char_length=1000, overlap=0):
@@ -322,15 +324,15 @@ class RetrievalEngine:
         self.tbl.create_fts_index("content",replace=True)
 
     async def lancedb_keyword_search(self, query: str, top_k: int = 5) -> List[dict]:
-        results = self.tbl.search(query, query_type='fts').limit(top_k).to_list()
+        results = self.tbl.search(query, query_type='fts').where(f"uuid={self.uuid_input}").limit(top_k).to_list()
         return results
 
     async def lancedb_semantic_search(self, query: str, top_k: int = 5) -> List[dict]:
-        results = self.tbl.search(query, query_type='vector').limit(top_k).to_list()
+        results = self.tbl.search(query, query_type='vector').where(f"uuid={self.uuid_input}").limit(top_k).to_list()
         return results
 
     async def lancedb_hybrid_search(self, query: str, top_k: int = 5) -> List[dict]:
-        results = self.tbl.search(query, query_type='hybrid').limit(top_k).to_list()
+        results = self.tbl.search(query, query_type='hybrid').where(f"uuid={self.uuid_input}").limit(top_k).to_list()
         return results
 
     async def lancedb_combined_search(self, query: str, top_k: int = 5) -> List[dict]:
