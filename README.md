@@ -98,6 +98,13 @@ flowchart TD
     JINA_API_KEY=your_jina_api_key  # Add this if you want to use Jina reader api
     BRAVE_API_KEY=your_brave_api_key  # Add this if you want to use Brave search engine
     ```
+     **LangSmith Configuration**:
+    If you want to enable tracing with LangSmith, add the following environment variables:
+    ```sh
+    LANGCHAIN_API_KEY=your_langsmith_api_key  # Required for LangSmith API access
+    LANGCHAIN_PROJECT=your_project_name  # Optional: Specify the project name for organizing traces
+    LANGCHAIN_ENDPOINT=https://api.langsmith.com  # Optional: Specify the LangSmith API endpoint
+    ```
 
 5. **Set up DuckDB**:
     DuckDB is used for storing chat history. Install DuckDB using the following commands based on your operating system:

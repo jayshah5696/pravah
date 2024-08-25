@@ -58,6 +58,41 @@ def check_model_key(model):
 
 def check_api_keys(config):
     required_keys = []
+    api_key_info = {
+        'TVLY_API_KEY': {
+            'description': "To set up the TVLY API key, please visit the TVLY developer portal and create an account. After that, you can generate your API key from the dashboard.",
+            'link': "https://app.tavily.com/sign-in"
+        },
+        'BRAVE_API_KEY': {
+            'description': "To obtain the Brave API key, go to the Brave Search API page, sign up, and follow the instructions to generate your API key.",
+            'link': "https://brave.com/search/api/"
+        },
+        'COHERE_API_KEY': {
+            'description': "For the Cohere API key, visit the Cohere website, create an account, and generate your API key from the API section.",
+            'link': "https://cohere.ai"
+        },
+        'JINA_API_KEY': {
+            'description': "To get the Jina API key, sign up on the Jina AI website and navigate to the API section to create your key.",
+            'link': "https://jina.ai"
+        },
+        'LANGCHAIN_API_KEY': {
+            'description': "You can obtain the LangChain API key by signing up on the Langsmith website and generating it from your account settings.",
+            'link': "https://langchain.com"
+        },
+        'OPENAI_API_KEY': {
+            'description': "To acquire the OpenAI API key, visit the OpenAI website, create an account, and generate your API key from the API section.",
+            'link': "https://openai.com"
+        },
+        'ANTHROPIC_API_KEY': {
+            'description': "To obtain the Anthropic API key, sign up on the Anthropic website and follow the instructions to generate your API key.",
+            'link': "https://anthropic.com"
+        },
+        'GROQ_API_KEY': {
+            'description': "For the Groq API key, visit the Groq website, create an account, and generate your API key from the API section.",
+            'link': "https://groq.com"
+        }
+    }
+
     if config.search_engine == 'tvly':
         required_keys.append('TVLY_API_KEY')
     elif config.search_engine == 'brave':
@@ -75,11 +110,19 @@ def check_api_keys(config):
     if config.search_type == 'jina':
         required_keys.append('JINA_API_KEY')
 
+    # Check for LangSmith related API keys
+    if 'LANGCHAIN_API_KEY' not in os.environ:
+        required_keys.append('LANGCHAIN_API_KEY')
+    if 'LANGCHAIN_PROJECT' not in os.environ:
+        required_keys.append('LANGCHAIN_PROJECT')
+
     missing_keys = [key for key in required_keys if not os.environ.get(key)]
 
     if missing_keys:
         st.warning("Some required API keys are missing. Please enter them below:")
         for key in missing_keys:
+            st.info(api_key_info[key]['description'])
+            st.markdown(f"[More Info]({api_key_info[key]['link']})")
             value = st.text_input(f"Enter {key}", type="password")
             if value:
                 update_env_file(key, value)
