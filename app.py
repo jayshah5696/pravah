@@ -79,6 +79,14 @@ def check_api_keys(config):
             'description': "You can obtain the LangChain API key by signing up on the Langsmith website and generating it from your account settings.",
             'link': "https://langchain.com"
         },
+        'LANGCHAIN_PROJECT': {
+            'description': "You can obtain the LangChain API key by signing up on the Langsmith website and generating it from your account settings.",
+            'link': "https://langchain.com"
+        },
+        'LANGCHAIN_ENDPOINT': {
+            'description': "You can obtain the LangChain API key by signing up on the Langsmith website and generating it from your account settings.",
+            'link': "https://langchain.com"
+        },
         'OPENAI_API_KEY': {
             'description': "To acquire the OpenAI API key, visit the OpenAI website, create an account, and generate your API key from the API section.",
             'link': "https://openai.com"
