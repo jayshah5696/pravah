@@ -339,6 +339,6 @@ class RetrievalEngine:
         from lancedb.rerankers import CohereReranker
         reranker = CohereReranker(column='content')
         results = (self.tbl.search(query, query_type='hybrid')
-                   .limit(top_k)
-                   .rerank(reranker=reranker))
+                   .limit(top_k*2)
+                   .rerank(reranker=reranker).limit(top_k))
         return results.to_list()

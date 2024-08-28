@@ -157,7 +157,7 @@ def setup_config_and_check_api_keys():
         config.search_type = st.selectbox("Search Type", ["default", "jina"], key='search_type_select')
         config.markdown = st.checkbox("Markdown", value=config.markdown, key='markdown_checkbox')
         config.search_engine = st.selectbox("Search Engine", ["duckduckgo", "brave", "tvly"], key='search_engine_select')
-        config.use_lancedb = st.checkbox("Use LanceDB", value=False, key='use_lancedb_checkbox')
+        config.use_lancedb = st.checkbox("Use LanceDB", value=True, key='use_lancedb_checkbox')
 
     with st.sidebar.expander("Rewrite Configuration", expanded=False):
         config.rewrite_model = st.text_input("Rewrite Model", config.rewrite_model, key='rewrite_model_input')
