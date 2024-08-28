@@ -1,0 +1,15 @@
+model_list:
+  - model_name: "*" 
+    litellm_params:
+      model: "*"
+    
+
+litellm_settings: # module level litellm settings - https://github.com/BerriAI/litellm/blob/main/litellm/__init__.py
+  drop_params: True
+  success_callback: ["langfuse"]
+
+# used for the /cachedContent and vertexAI native endpoints
+default_vertex_config:
+  vertex_project: "1010845770137"
+  vertex_location: "us-central1"
+  vertex_credentials: "adroit-crow-413218-a956eef1a2a8.json" # Add path to service account.json

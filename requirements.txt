@@ -18,3 +18,4 @@ duckduckgo_search
 brave-search
 lancedb
 tantivy
+cohere

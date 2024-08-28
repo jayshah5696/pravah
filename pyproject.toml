@@ -28,6 +28,7 @@ bm25s = {extras = ["full"], version = "^0.1.10"}
 lancedb = "^0.12.0"
 tantivy = "^0.22.0"
 langsmith = "^0.1.104"
+cohere = "^5.8.1"
 
 
 [build-system]

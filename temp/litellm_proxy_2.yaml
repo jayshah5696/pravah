@@ -1,0 +1,31 @@
+model_list:
+  - model_name: "command-r-plus" 
+    litellm_params:
+      model: "cohere/command-r-plus"
+      api_key: "os.environ/COHERE_API_KEY"
+  - model_name: "command-nightly"
+    litellm_params:
+      model: "cohere/command-nightly"
+      api_key: "os.environ/COHERE_API_KEY"
+  - model_name: "command-light-nightly"
+    litellm_params:
+      model: "cohere/command-light-nightly"
+      api_key: "os.environ/COHERE_API_KEY"
+  - model_name: "openai-gpt-4o-mini"
+    litellm_params:
+      model: "openai/gpt-4o-mini"
+      api_key: "os.environ/OPENAI_API_KEY"
+  - model_name: "openai-gpt-4o"
+    litellm_params:
+      model: "openai/gpt-4o"
+      api_key: "os.environ/OPENAI_API_KEY"
+  - model_name: "groq/*"
+    litellm_params:
+      model: "groq/*"
+      api_key: os.environ/GROQ_API_KEY
+
+litellm_settings: # module level litellm settings - https://github.com/BerriAI/litellm/blob/main/litellm/__init__.py
+  drop_params: False
+  success_callback: ["langfuse"]
+  set_verbose: True
+  json_logs: True
