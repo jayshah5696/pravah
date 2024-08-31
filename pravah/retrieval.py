@@ -61,7 +61,7 @@ class RetrievalEngine:
         self.index = None
 
         if self.use_lancedb:
-            self.lancedb = lancedb.connect(".my_db")
+            self.lancedb = lancedb.connect("../.my_db")
             self.tbl = asyncio.run(self.create_lancedb_table())  # Use asyncio.run to call the async function
             self.add_chunks_to_lancedb()
         else:
