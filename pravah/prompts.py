@@ -190,12 +190,18 @@ def generate_prompt_template(query, context_list, extra_context=None):
 
 
     <citation_style>
-        Include inline citations for each piece of information used, referencing the source URLs.
-        Use markdown-style inline citations. For example: 
-        - "Jinja2 is a popular templating engine [Jinja2 Documentation](https://example.com)."
-        - "Python is a versatile programming language [Python Official Site](https://example2.com)."
-        - "The Earth revolves around the Sun [NASA Solar System Exploration](https://example3.com)."
-        - "The Eiffel Tower is located in Paris [Paris Tourist Information](https://example4.com)."
+        Include numbered citations for each piece of information used, referencing the source URLs at the end.
+        Use markdown-style superscript (^) for inline citations. For example: 
+        1. "Jinja2 is a popular templating engine.[^1]"
+        2. "Python is a versatile programming language.[^2]"
+        3. "The Earth revolves around the Sun.[^3]"
+        4. "The Eiffel Tower is located in Paris.[^4]"
+
+        References:
+        - 1. Jinja2 Documentation [Jinja2 is a popular templating engine for Python](https://example.com)
+        - 2. Python Official Site [Python is a versatile programming language](https://example2.com)
+        - 3. NASA Solar System Exploration [Information about the solar system and space exploration](https://example3.com)
+        - 4. Paris Tourist Information [Details about tourist attractions in Paris](https://example4.com)
     </citation_style>
 
     <additional_guidelines>
