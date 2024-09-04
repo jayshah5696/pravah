@@ -198,10 +198,10 @@ def generate_prompt_template(query, context_list, extra_context=None):
         4. "The Eiffel Tower is located in Paris.[^4]"
 
         References:
-        - 1. Jinja2 Documentation [Jinja2 is a popular templating engine for Python](https://example.com)
-        - 2. Python Official Site [Python is a versatile programming language](https://example2.com)
-        - 3. NASA Solar System Exploration [Information about the solar system and space exploration](https://example3.com)
-        - 4. Paris Tourist Information [Details about tourist attractions in Paris](https://example4.com)
+        [^1] Jinja2 Documentation [Jinja2 is a popular templating engine for Python](https://example.com)
+        [^2] Python Official Site [Python is a versatile programming language](https://example2.com)
+        [^3] NASA Solar System Exploration [Information about the solar system and space exploration](https://example3.com)
+        [^4] Paris Tourist Information [Details about tourist attractions in Paris](https://example4.com)
     </citation_style>
 
     <additional_guidelines>
