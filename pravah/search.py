@@ -10,11 +10,12 @@ import aiohttp
 import asyncio
 import warnings
 from bs4 import MarkupResemblesLocatorWarning
-import PyPDF2
+import pymupdf4llm
 import io
 import re
 from brave import AsyncBrave
 from duckduckgo_search import AsyncDDGS
+from tenacity import retry, stop_after_attempt, wait_fixed
 warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 
 # load_dotenv()
@@ -61,6 +62,9 @@ JINA_HEADERS = {
     'Authorization': 'Bearer {}'.format(jina_api_key),
     'X-Return-Format': 'markdown'
 }
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
 async def fetch_content(url: str) -> str:
     """Fetches the content from a given URL asynchronously.
 
@@ -78,11 +82,8 @@ async def fetch_content(url: str) -> str:
                 if url.endswith(".pdf"):
                     # Handle PDF content
                     content = await response.read()
-                    pdf_reader = PyPDF2.PdfReader(io.BytesIO(content))
-                    text = ""
-                    for page in range(len(pdf_reader.pages)):
-                        text += pdf_reader.pages[page].extract_text()
-                    return text
+                    md_text = pymupdf4llm.to_markdown(io.BytesIO(content))
+                    return md_text
                 else:
                     # Handle other content types as before
                     return await response.text()

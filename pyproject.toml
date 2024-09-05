@@ -21,7 +21,6 @@ rerankers = {extras = ["flashrank"], version = "^0.4.0"}
 streamlit = "^1.37.1"
 duckdb = "^1.0.0"
 beautifulsoup4 = "^4.12.3"
-pypdf2 = "^3.0.1"
 duckduckgo-search = "^6.2.9"
 brave-search = "^0.2.0"
 bm25s = {extras = ["full"], version = "^0.1.10"}
@@ -30,6 +29,7 @@ tantivy = "^0.22.0"
 langsmith = "^0.1.104"
 cohere = "^5.8.1"
 anthropic = "^0.34.2"
+pymupdf4llm = "^0.0.14"
 
 
 [build-system]
