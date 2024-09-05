@@ -64,7 +64,7 @@ JINA_HEADERS = {
 }
 
 
-@retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(0.1), retry_error_callback=lambda retry_state: '')
 async def fetch_content(url: str) -> str:
     """Fetches the content from a given URL asynchronously.
 
@@ -77,9 +77,11 @@ async def fetch_content(url: str) -> str:
     try:
         headers = {'User-Agent': random.choice(USER_AGENTS)}
         async with aiohttp.ClientSession() as session:
+            if 'https://arxiv.org/abs/' in url:
+                url = url.replace('abs', 'pdf')
             async with session.get(url, headers=headers) as response:
                 response.raise_for_status()
-                if url.endswith(".pdf"):
+                if url.endswith(".pdf") or 'https://arxiv.org/' in url:
                     # Handle PDF content
                     content = await response.read()
                     md_text = pymupdf4llm.to_markdown(io.BytesIO(content))
