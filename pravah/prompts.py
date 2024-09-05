@@ -191,17 +191,19 @@ def generate_prompt_template(query, context_list, extra_context=None):
 
     <citation_style>
         Include numbered citations for each piece of information used, referencing the source URLs at the end.
-        Use markdown-style superscript (^) for inline citations. For example: 
+        Use markdown-style superscript (^) for inline citations. Do not repeat the same link; use the same number for the same link.
+        For example: 
         1. "Jinja2 is a popular templating engine.[^1]"
         2. "Python is a versatile programming language.[^2]"
         3. "The Earth revolves around the Sun.[^3]"
         4. "The Eiffel Tower is located in Paris.[^4]"
+        5. "The Eiffel Tower is the most visited monument in Paris.[^4]"
 
         References:
-        [^1] Jinja2 Documentation [Jinja2 is a popular templating engine for Python](https://example.com)
-        [^2] Python Official Site [Python is a versatile programming language](https://example2.com)
-        [^3] NASA Solar System Exploration [Information about the solar system and space exploration](https://example3.com)
-        [^4] Paris Tourist Information [Details about tourist attractions in Paris](https://example4.com)
+        [^1] Jinja2 Documentation [Jinja2 is a popular templating engine for Python](https://jinja.com)
+        [^2] Python Official Site [Python is a versatile programming language](https://python_program.com)
+        [^3] NASA Solar System Exploration [Information about the solar system and space exploration](https://solar.com)
+        [^4] Paris Tourist Information [Details about tourist attractions in Paris](https://paris.com)
     </citation_style>
 
     <additional_guidelines>
