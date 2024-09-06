@@ -205,16 +205,16 @@ with duckdb.connect(database='pravah.db') as conn:  # Use context manager for co
 # Cache search query
 @lru_cache(maxsize=128)
 @traceable  # Add tracing to the search query function
-def cached_search_query(query):
+def cached_search_query(query, num_results=10):
     if config.search_engine == 'tvly':
-        return search_query(query, api_key=config.search_tvly_api_key)
+        return search_query(query, api_key=config.search_tvly_api_key, num_results=num_results)
     elif config.search_engine == 'brave':
         brave_api_key = os.environ['BRAVE_API_KEY'] 
         if brave_api_key is None:
             raise ValueError("Please set the BRAVE_API_KEY environment variable")
-        return asyncio.run(search_query_brave(query, api_key=brave_api_key))
+        return asyncio.run(search_query_brave(query, api_key=brave_api_key, num_results=num_results))
     elif config.search_engine == 'duckduckgo':
-        return asyncio.run(search_query_duckduckgo(query))
+        return asyncio.run(search_query_duckduckgo(query, num_results=num_results))
     else:
         raise ValueError("Unsupported search engine")
 

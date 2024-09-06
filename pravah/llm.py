@@ -3,6 +3,7 @@ from rich.pretty import pprint
 import os
 # Load environment variables from .env file
 from dotenv import load_dotenv
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 # Safely get the API key
 # api_key = os.getenv('GROQ_API_KEY')
@@ -12,6 +13,7 @@ from dotenv import load_dotenv
 # print(api_key)
 
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
 def completion_llm(text, model='groq/llama3-70b-8192', temperature=0.7, stream=False):
     messages = [{ "content": text, "role": "user" }]
     response = completion(model=model, messages=messages, temperature=temperature,stream=stream)
@@ -19,6 +21,7 @@ def completion_llm(text, model='groq/llama3-70b-8192', temperature=0.7, stream=F
         return response
     return response.choices[0].message.content
 
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
 def chat_llm(input, model='groq/llama3-70b-8192', temperature=0.7):
     messages = [{ "content": input, "role": "user" }]
     response = completion(model=model, messages=messages, temperature=temperature)
@@ -26,7 +29,7 @@ def chat_llm(input, model='groq/llama3-70b-8192', temperature=0.7):
     messages.append({ "content": response.choices[0].message.content, "role": "assistant" })
     return messages
 
-
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
 def chat_llm_v2_updated(messages, input, model='groq/llama3-70b-8192', system_prompt=None, temperature=0.7):
     # Check if system prompt already exists in the conversation
     if system_prompt and not any(msg.get("role") == "system" for msg in messages):
