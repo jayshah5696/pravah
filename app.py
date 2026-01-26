@@ -1,429 +1,1042 @@
+"""
+Pravah v2 - AI Search Engine
+A Streamlit chat application powered by LangGraph ReAct Agent
+
+Features:
+- Full chat interface with message history
+- Model selection via LiteLLM (OpenAI, Anthropic, Groq, etc.)
+- Real-time tool execution visibility
+- Streaming responses
+- Session persistence
+- Configuration via config.yaml
+"""
+
 import streamlit as st
 import asyncio
-import aiohttp
-import duckdb
-from functools import lru_cache
-from dataclasses import dataclass
-from dotenv import load_dotenv, set_key
-import os
 import uuid
-from rerankers import Reranker
-from langsmith import traceable, Client
+import os
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+import yaml
+from dotenv import load_dotenv
+
+from pravah.history import get_history_store, HistoryStore
+
+# Load environment variables
 load_dotenv()
-from pravah.llm import completion_llm
-from pravah.prompts import generate_prompt_template, query_rewriter, extract_rewritten_prompt
-from pravah.retrieval import RetrievalEngine, LiteLLMEmbeddingClient
-from pravah.search import search_query, get_text_from_url, search_query_brave, search_query_duckduckgo
-from langsmith.run_trees import RunTree
-# Load API key from environment
-search_tvly_api_key = os.environ['TVLY_API_KEY']
-if search_tvly_api_key is None:
-    raise ValueError("Please set the TVLY_API_KEY environment variable")
 
-# Define configuration dataclass
-@dataclass
-class Config:
-    search_tvly_api_key: str
-    model: str = 'openai/gpt-4o-mini'
-    temperature: float = 0.5
-    chunking_method: str = 'tokens'
-    chunk_size: int = 1500
-    overlap: int = 300
-    keyword_search_limit: int = 20
-    rerank_limit: int = 10
-    rewrite_model: str = 'groq/llama-3.1-8b-instant'
-    rewrite_model_temperature: float = 0.1
-    search_type: str = 'default' # or jina
-    markdown: bool = True
-    search_engine: str = 'tvly'
-    reranker: str = 'cohere' # or flashrank
 
-config = Config(search_tvly_api_key=search_tvly_api_key)
+# ============================================================================
+# Configuration Loading
+# ============================================================================
 
-def update_env_file(key, value):
-    env_path = os.path.join(os.path.dirname(__file__), '.env')
-    set_key(env_path, key, value)
-    os.environ[key] = value
+CONFIG_PATH = Path(__file__).parent / "config.yaml"
 
-def check_model_key(model):
-    if 'openai' in model.lower():
-        return 'OPENAI_API_KEY'
-    elif 'anthropic' in model.lower():
-        return 'ANTHROPIC_API_KEY'
-    elif 'groq' in model.lower():
-        return 'GROQ_API_KEY'
-    elif 'cohere' in model.lower():
-        return 'COHERE_API_KEY'
-    return None
 
-def check_api_keys(config):
-    required_keys = []
-    api_key_info = {
-        'TVLY_API_KEY': {
-            'description': "To set up the TVLY API key, please visit the TVLY developer portal and create an account. After that, you can generate your API key from the dashboard.",
-            'link': "https://app.tavily.com/sign-in"
-        },
-        'BRAVE_API_KEY': {
-            'description': "To obtain the Brave API key, go to the Brave Search API page, sign up, and follow the instructions to generate your API key.",
-            'link': "https://brave.com/search/api/"
-        },
-        'COHERE_API_KEY': {
-            'description': "For the Cohere API key, visit the Cohere website, create an account, and generate your API key from the API section.",
-            'link': "https://cohere.ai"
-        },
-        'JINA_API_KEY': {
-            'description': "To get the Jina API key, sign up on the Jina AI website and navigate to the API section to create your key.",
-            'link': "https://jina.ai"
-        },
-        'LANGCHAIN_API_KEY': {
-            'description': "You can obtain the LangChain API key by signing up on the Langsmith website and generating it from your account settings.",
-            'link': "https://langchain.com"
-        },
-        'LANGCHAIN_PROJECT': {
-            'description': "You can obtain the LangChain API key by signing up on the Langsmith website and generating it from your account settings.",
-            'link': "https://langchain.com"
-        },
-        'LANGCHAIN_ENDPOINT': {
-            'description': "You can obtain the LangChain API key by signing up on the Langsmith website and generating it from your account settings.",
-            'link': "https://langchain.com"
-        },
-        'OPENAI_API_KEY': {
-            'description': "To acquire the OpenAI API key, visit the OpenAI website, create an account, and generate your API key from the API section.",
-            'link': "https://openai.com"
-        },
-        'ANTHROPIC_API_KEY': {
-            'description': "To obtain the Anthropic API key, sign up on the Anthropic website and follow the instructions to generate your API key.",
-            'link': "https://anthropic.com"
-        },
-        'GROQ_API_KEY': {
-            'description': "For the Groq API key, visit the Groq website, create an account, and generate your API key from the API section.",
-            'link': "https://groq.com"
-        }
+@st.cache_data
+def load_yaml_config() -> dict[str, Any]:
+    """Load configuration from YAML file."""
+    if CONFIG_PATH.exists():
+        with open(CONFIG_PATH) as f:
+            return yaml.safe_load(f)
+    return {}
+
+
+def get_available_models() -> list[str]:
+    """Get list of available model names from config."""
+    config = load_yaml_config()
+    models = config.get("models", [])
+    return [m["name"] for m in models if isinstance(m, dict) and "name" in m]
+
+
+def get_model_descriptions() -> dict[str, str]:
+    """Get model name -> description mapping."""
+    config = load_yaml_config()
+    models = config.get("models", [])
+    return {
+        m["name"]: m.get("description", "")
+        for m in models
+        if isinstance(m, dict) and "name" in m
     }
 
-    if config.search_engine == 'tvly':
-        required_keys.append('TVLY_API_KEY')
-    elif config.search_engine == 'brave':
-        required_keys.append('BRAVE_API_KEY')
 
-    # Check API keys for both model and rewrite_model
-    for model in [config.model, config.rewrite_model]:
-        key = check_model_key(model)
-        if key:
-            required_keys.append(key)
+def get_api_key_mapping() -> dict[str, str]:
+    """Get provider prefix -> env var mapping."""
+    config = load_yaml_config()
+    return config.get("api_keys", {})
+
+
+def get_defaults() -> dict[str, Any]:
+    """Get default settings from config."""
+    config = load_yaml_config()
+    return config.get("defaults", {})
+
+
+# Must be the first Streamlit command
+_yaml_config = load_yaml_config()
+_ui_config = _yaml_config.get("ui", {})
+
+st.set_page_config(
+    page_title=_ui_config.get("page_title", "Pravah - AI Search Engine"),
+    page_icon=_ui_config.get("page_icon", "assets/pravha.png"),
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# Custom CSS for cleaner UI
+st.markdown(
+    """
+<style>
+    /* Hide Streamlit branding */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
     
-    if config.reranker == 'cohere':
-        required_keys.append('COHERE_API_KEY')
+    /* Rounded chat input */
+    .stChatInput > div > div > input {
+        border-radius: 20px;
+    }
     
-    if config.search_type == 'jina':
-        required_keys.append('JINA_API_KEY')
+    /* Better sidebar spacing */
+    .stSidebar > div:first-child {
+        padding-top: 1rem;
+    }
+    
+    /* Conversation history buttons */
+    .stSidebar button[kind="secondary"] {
+        text-align: left;
+        font-size: 0.85rem;
+        padding: 0.4rem 0.6rem;
+    }
+    
+    /* Tool calls expander styling */
+    .streamlit-expanderHeader {
+        font-size: 0.85rem;
+        color: #666;
+    }
+    
+    /* Debug panel metrics */
+    [data-testid="stMetricValue"] {
+        font-size: 1.1rem;
+    }
+    
+    /* Welcome message styling */
+    .welcome-message h3 {
+        margin-bottom: 1rem;
+    }
+    
+    /* Keyboard shortcut hints */
+    .shortcut-hint {
+        font-size: 0.7rem;
+        color: #888;
+        margin-left: 0.5rem;
+    }
+    
+    /* Scrollable sidebar container styling */
+    [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] > div {
+        scrollbar-width: thin;
+        scrollbar-color: #888 transparent;
+    }
+    
+    [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] > div::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] > div::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    
+    [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] > div::-webkit-scrollbar-thumb {
+        background-color: #888;
+        border-radius: 3px;
+    }
+    
+    [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] > div::-webkit-scrollbar-thumb:hover {
+        background-color: #666;
+    }
+</style>
+""",
+    unsafe_allow_html=True,
+)
 
-    # Check for LangSmith related API keys
-    if 'LANGCHAIN_API_KEY' not in os.environ:
-        required_keys.append('LANGCHAIN_API_KEY')
-    if 'LANGCHAIN_PROJECT' not in os.environ:
-        required_keys.append('LANGCHAIN_PROJECT')
+# Keyboard shortcuts via JavaScript
+st.markdown(
+    """
+<script>
+document.addEventListener('keydown', function(e) {
+    // Cmd/Ctrl + K - Focus search box
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        const searchInput = document.querySelector('input[placeholder="Search..."]');
+        if (searchInput) {
+            searchInput.focus();
+            searchInput.select();
+        }
+    }
+    
+    // Cmd/Ctrl + N - New chat (click the New Chat button)
+    if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        e.preventDefault();
+        const newChatBtn = Array.from(document.querySelectorAll('button')).find(
+            btn => btn.textContent.includes('New Chat')
+        );
+        if (newChatBtn) {
+            newChatBtn.click();
+        }
+    }
+    
+    // Escape - Focus chat input
+    if (e.key === 'Escape') {
+        const chatInput = document.querySelector('[data-testid="stChatInput"] textarea, [data-testid="stChatInput"] input');
+        if (chatInput) {
+            chatInput.focus();
+        }
+    }
+    
+    // / - Focus chat input (when not already in input)
+    if (e.key === '/' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+        e.preventDefault();
+        const chatInput = document.querySelector('[data-testid="stChatInput"] textarea, [data-testid="stChatInput"] input');
+        if (chatInput) {
+            chatInput.focus();
+        }
+    }
+});
+</script>
+""",
+    unsafe_allow_html=True,
+)
 
-    missing_keys = [key for key in required_keys if not os.environ.get(key)]
 
-    if missing_keys:
-        st.warning("Some required API keys are missing. Please enter them below:")
-        for key in missing_keys:
-            st.info(api_key_info[key]['description'])
-            st.markdown(f"[More Info]({api_key_info[key]['link']})")
-            value = st.text_input(f"Enter {key}", type="password")
-            if value:
-                update_env_file(key, value)
-        
-        if st.button("Save API Keys"):
-            st.success("API keys saved successfully. Please restart the app.")
-            st.stop()
+# ============================================================================
+# Configuration
+# ============================================================================
 
-def setup_config_and_check_api_keys():
-    st.sidebar.header("Configuration")
 
-    with st.sidebar.expander("Model Configuration", expanded=True):
-        config.model = st.text_input("Model", config.model, key='model_input')
-        config.temperature = st.slider("Temperature", 0.0, 1.0, config.temperature, key='temperature_slider')
+@dataclass
+class Config:
+    """Application configuration."""
 
-    with st.sidebar.expander("Chunking Configuration", expanded=False):
-        config.chunk_size = st.number_input("Chunk Size", value=config.chunk_size, key='chunk_size_input')
-        config.chunking_method = st.selectbox("Chunking Method", ["tokens", "text", 'regex'], key='chunking_method_select')
-        config.overlap = st.number_input("Overlap", value=config.overlap, key='overlap_input')
+    # Model settings
+    model: str = field(
+        default_factory=lambda: get_defaults().get("model", "openai/gpt-4o-mini")
+    )
+    temperature: float = field(
+        default_factory=lambda: get_defaults().get("temperature", 0.3)
+    )
 
-    with st.sidebar.expander("Search Configuration", expanded=False):
-        config.keyword_search_limit = st.number_input("Keyword Search Limit", value=config.keyword_search_limit, key='keyword_search_limit_input')
-        config.rerank_limit = st.number_input("Rerank Limit", value=config.rerank_limit, key='rerank_limit_input')
-        config.search_type = st.selectbox("Search Type", ["default", "jina"], key='search_type_select')
-        config.markdown = st.checkbox("Markdown", value=config.markdown, key='markdown_checkbox')
-        config.search_engine = st.selectbox("Search Engine", ["duckduckgo", "brave", "tvly"], key='search_engine_select')
-        config.use_lancedb = st.checkbox("Use LanceDB", value=True, key='use_lancedb_checkbox')
+    # Search settings
+    search_engine: str = "tvly"
+    max_search_results: int = field(
+        default_factory=lambda: get_defaults().get("max_search_results", 5)
+    )
 
-    with st.sidebar.expander("Rewrite Configuration", expanded=False):
-        config.rewrite_model = st.text_input("Rewrite Model", config.rewrite_model, key='rewrite_model_input')
-        config.rewrite_model_temperature = st.slider("Rewrite Model Temperature", 0.0, 1.0, config.rewrite_model_temperature, key='rewrite_model_temperature_slider')
+    # Available models loaded from config.yaml
+    available_models: list[str] = field(default_factory=get_available_models)
 
-    with st.sidebar.expander("Reranker Configuration", expanded=False):
-        config.reranker = st.selectbox("Reranker", ["cohere", "flashrank"], key='reranker_select')
 
-    # Check for required API keys based on configuration
-    check_api_keys(config)
+# ============================================================================
+# API Key Management
+# ============================================================================
+
+
+def get_required_api_keys(model: str) -> list[str]:
+    """Determine which API keys are required based on the selected model."""
+    api_key_mapping = get_api_key_mapping()
+    required = [
+        api_key_mapping.get("tavily", "TVLY_API_KEY")
+    ]  # Always need Tavily for search
+
+    # Extract provider from model string (e.g., "openai/gpt-4o" -> "openai")
+    provider = model.split("/")[0].lower() if "/" in model else model.lower()
+
+    # Look up the API key for this provider
+    if provider in api_key_mapping:
+        required.append(api_key_mapping[provider])
+    elif "claude" in model.lower():
+        # Handle claude models that might not have anthropic prefix
+        required.append(api_key_mapping.get("anthropic", "ANTHROPIC_API_KEY"))
+
+    return required
+
+
+def check_api_keys(required_keys: list[str]) -> dict[str, bool]:
+    """Check which required API keys are present."""
+    return {key: bool(os.environ.get(key)) for key in required_keys}
+
+
+def render_api_key_setup():
+    """Render API key setup UI in sidebar."""
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("API Keys")
+
+    # Get required keys for current model
+    config = st.session_state.get("config", Config())
+    required_keys = get_required_api_keys(config.model)
+    key_status = check_api_keys(required_keys)
+
+    # Show status
+    all_present = all(key_status.values())
+
+    if all_present:
+        st.sidebar.success("All required API keys configured")
+    else:
+        st.sidebar.warning("Some API keys missing")
+
+    # Expandable section for key management
+    with st.sidebar.expander("Manage API Keys", expanded=not all_present):
+        for key, present in key_status.items():
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                if present:
+                    st.text(f"✅ {key}")
+                else:
+                    new_value = st.text_input(
+                        f"{key}",
+                        type="password",
+                        key=f"input_{key}",
+                        placeholder="Enter API key...",
+                    )
+                    if new_value:
+                        os.environ[key] = new_value
+                        st.rerun()
+
+
+# ============================================================================
+# History Sidebar
+# ============================================================================
+
+
+def _group_conversations_by_date(conversations: list[dict]) -> dict[str, list]:
+    """Group conversations by date categories."""
+    from datetime import date, timedelta
+
+    today = date.today()
+    yesterday = today - timedelta(days=1)
+    week_ago = today - timedelta(days=7)
+    month_ago = today - timedelta(days=30)
+
+    grouped: dict[str, list] = {
+        "Pinned": [],
+        "Today": [],
+        "Yesterday": [],
+        "This Week": [],
+        "This Month": [],
+        "Older": [],
+    }
+
+    for conv in conversations:
+        # Pinned conversations go to top
+        if conv.get("is_pinned"):
+            grouped["Pinned"].append(conv)
+            continue
+
+        conv_date = conv["updated_at"].date() if conv["updated_at"] else today
+
+        if conv_date == today:
+            grouped["Today"].append(conv)
+        elif conv_date == yesterday:
+            grouped["Yesterday"].append(conv)
+        elif conv_date > week_ago:
+            grouped["This Week"].append(conv)
+        elif conv_date > month_ago:
+            grouped["This Month"].append(conv)
+        else:
+            grouped["Older"].append(conv)
+
+    return grouped
+
+
+def render_history_sidebar():
+    """Render the conversation history in the sidebar with search."""
+    history = get_history_store()
+
+    # Search box (stays fixed at top)
+    search_query = st.sidebar.text_input(
+        "Search chats",
+        placeholder="Search...",
+        key="chat_search",
+        label_visibility="collapsed",
+    )
+
+    # Pagination settings
+    page_size = 30
+
+    # Handle search
+    if search_query and search_query.strip():
+        conversations = history.search_conversations(search_query.strip(), limit=20)
+        if not conversations:
+            st.sidebar.caption(f"No results for '{search_query}'")
+            return
+        st.sidebar.caption(f"Results for '{search_query}'")
+    else:
+        # Get paginated list
+        offset = st.session_state.get("history_offset", 0)
+        conversations = history.list_conversations(limit=page_size, offset=offset)
+
+        if not conversations and offset == 0:
+            st.sidebar.caption("No conversation history yet")
+            return
+
+    # Group by date
+    grouped = _group_conversations_by_date(conversations)
+
+    # Create a scrollable container for the conversation list
+    # Height of 400px provides good visibility without pushing other content off screen
+    with st.sidebar.container(height=400, border=False):
+        # Render each group inside the scrollable container
+        for group_name, convs in grouped.items():
+            if not convs:
+                continue
+
+            # Group header with icon
+            if group_name == "Pinned":
+                st.markdown(f"**{group_name}**")
+            else:
+                st.caption(group_name)
+
+            for conv in convs:
+                _render_conversation_item_in_container(conv, history)
+
+        # Load more button (only when not searching) - inside scrollable area
+        if not search_query:
+            total = history.get_conversation_count()
+            shown = st.session_state.get("history_offset", 0) + len(conversations)
+            if shown < total:
+                if st.button(
+                    f"Load more ({total - shown} remaining)",
+                    use_container_width=True,
+                    key="load_more_history",
+                ):
+                    st.session_state.history_offset = (
+                        st.session_state.get("history_offset", 0) + page_size
+                    )
+                    st.rerun()
+
+
+def _render_conversation_item(conv: dict, history):
+    """Render a single conversation item in the sidebar (legacy, used outside container)."""
+    conv_id = conv["id"]
+    is_pinned = conv.get("is_pinned", False)
+
+    # Truncate title
+    title = conv["title"]
+    if len(title) > 35:
+        title = title[:35] + "..."
+
+    # Add pin indicator
+    if is_pinned:
+        title = f"* {title}"
+
+    # Main row with conversation button
+    col1, col2 = st.sidebar.columns([5, 1])
+
+    with col1:
+        if st.button(
+            title,
+            key=f"conv_{conv_id}",
+            use_container_width=True,
+            help=f"{conv['message_count']} msgs | {conv['model']}",
+        ):
+            load_conversation(conv_id)
+
+    with col2:
+        # Context menu using popover
+        with st.popover(":", help="Options"):
+            if is_pinned:
+                if st.button("Unpin", key=f"unpin_{conv_id}", use_container_width=True):
+                    history.pin_conversation(conv_id, False)
+                    st.rerun()
+            else:
+                if st.button("Pin", key=f"pin_{conv_id}", use_container_width=True):
+                    history.pin_conversation(conv_id, True)
+                    st.rerun()
+
+            if st.button("Archive", key=f"archive_{conv_id}", use_container_width=True):
+                history.archive_conversation(conv_id, True)
+                st.rerun()
+
+            if st.button(
+                "Delete", key=f"del_{conv_id}", use_container_width=True, type="primary"
+            ):
+                history.delete_conversation(conv_id)
+                st.rerun()
+
+
+def _render_conversation_item_in_container(conv: dict, history):
+    """Render a single conversation item inside a container (uses st. not st.sidebar)."""
+    conv_id = conv["id"]
+    is_pinned = conv.get("is_pinned", False)
+
+    # Truncate title
+    title = conv["title"]
+    if len(title) > 35:
+        title = title[:35] + "..."
+
+    # Add pin indicator
+    if is_pinned:
+        title = f"* {title}"
+
+    # Main row with conversation button (use st.columns, not st.sidebar.columns)
+    col1, col2 = st.columns([5, 1])
+
+    with col1:
+        if st.button(
+            title,
+            key=f"conv_{conv_id}",
+            use_container_width=True,
+            help=f"{conv['message_count']} msgs | {conv['model']}",
+        ):
+            load_conversation(conv_id)
+
+    with col2:
+        # Context menu using popover
+        with st.popover(":", help="Options"):
+            if is_pinned:
+                if st.button("Unpin", key=f"unpin_{conv_id}", use_container_width=True):
+                    history.pin_conversation(conv_id, False)
+                    st.rerun()
+            else:
+                if st.button("Pin", key=f"pin_{conv_id}", use_container_width=True):
+                    history.pin_conversation(conv_id, True)
+                    st.rerun()
+
+            if st.button("Archive", key=f"archive_{conv_id}", use_container_width=True):
+                history.archive_conversation(conv_id, True)
+                st.rerun()
+
+            if st.button(
+                "Delete", key=f"del_{conv_id}", use_container_width=True, type="primary"
+            ):
+                history.delete_conversation(conv_id)
+                st.rerun()
+
+
+def load_conversation(conversation_id: str):
+    """Load a conversation from history into session state."""
+    history = get_history_store()
+    conv = history.get_conversation(conversation_id)
+
+    if conv:
+        st.session_state.thread_id = conv.id
+        st.session_state.messages = [
+            {
+                "role": msg.role,
+                "content": msg.content,
+                "tool_calls": msg.tool_calls,
+            }
+            for msg in conv.messages
+        ]
+        st.rerun()
+
+
+# ============================================================================
+# Sidebar Configuration
+# ============================================================================
+
+
+def render_sidebar() -> Config:
+    """Render sidebar configuration and return Config object."""
+
+    # Logo and title
+    if os.path.exists("assets/pravha.png"):
+        st.sidebar.image("assets/pravha.png", width=150)
+    st.sidebar.title("Pravah")
+    st.sidebar.caption("AI Search Engine")
+
+    st.sidebar.markdown("---")
+
+    # Model Configuration
+    st.sidebar.subheader("Model Settings")
+
+    config = Config()
+
+    from pravah.pricing import get_model_cost_tier, get_model_pricing
+
+    # Model selection
+    config.model = st.sidebar.selectbox(
+        "Model",
+        options=config.available_models,
+        index=config.available_models.index(config.model)
+        if config.model in config.available_models
+        else 0,
+        help="Select the LLM to use. Different models have different capabilities and costs.",
+    )
+
+    # Show cost tier for selected model
+    tier = get_model_cost_tier(config.model)
+    pricing = get_model_pricing(config.model)
+    if pricing:
+        st.sidebar.caption(
+            f"Cost: {tier} (${pricing.input_per_million:.2f}/${pricing.output_per_million:.2f} per 1M tokens)"
+        )
+    else:
+        st.sidebar.caption(f"Cost: {tier}")
+
+    # Custom model option
+    custom_model = st.sidebar.text_input(
+        "Custom Model (optional)",
+        placeholder="e.g., together/meta-llama/Llama-3-70b",
+        help="Enter a custom LiteLLM model string",
+    )
+    if custom_model:
+        config.model = custom_model
+
+    # Temperature
+    config.temperature = st.sidebar.slider(
+        "Temperature",
+        min_value=0.0,
+        max_value=1.0,
+        value=0.3,
+        step=0.1,
+        help="Higher values make output more random, lower values more deterministic.",
+    )
+
+    # API Key management
+    render_api_key_setup()
+
+    # Session management
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Conversations")
+
+    # New chat button
+    if st.sidebar.button("New Chat", use_container_width=True, type="primary"):
+        st.session_state.messages = []
+        st.session_state.thread_id = str(uuid.uuid4())
+        st.rerun()
+
+    # History viewer
+    render_history_sidebar()
+
+    # Debug toggle
+    st.sidebar.markdown("---")
+    st.session_state.show_debug = st.sidebar.checkbox(
+        "Show Debug Info",
+        value=st.session_state.get("show_debug", False),
+        help="Show token usage, latency, and cost estimates",
+    )
+
+    # Keyboard shortcuts help
+    with st.sidebar.expander("Keyboard Shortcuts"):
+        st.markdown("""
+        - **Cmd/Ctrl + K** - Search chats
+        - **Cmd/Ctrl + N** - New chat
+        - **/** - Focus chat input
+        - **Esc** - Focus chat input
+        """)
+
+    # Store config in session state
+    st.session_state.config = config
 
     return config
 
-def create_tables(conn):
-    # Create tables without explicit transaction management
-    conn.execute("CREATE TABLE IF NOT EXISTS chat_history (conversation_uuid UUID PRIMARY KEY, user_input TEXT, response TEXT)")
-    conn.execute("CREATE TABLE IF NOT EXISTS search_results (conversation_uuid UUID, search_result JSON, FOREIGN KEY(conversation_uuid) REFERENCES chat_history(conversation_uuid))")
-    conn.execute("CREATE TABLE IF NOT EXISTS fetched_texts (url TEXT PRIMARY KEY, text TEXT)")
-    conn.execute("CREATE TABLE IF NOT EXISTS retrieved_chunks (conversation_uuid UUID, search_type TEXT, chunk TEXT, FOREIGN KEY(conversation_uuid) REFERENCES chat_history(conversation_uuid))")
-    conn.execute("CREATE TABLE IF NOT EXISTS re_written_prompt (conversation_uuid UUID, re_written_prompt TEXT, FOREIGN KEY(conversation_uuid) REFERENCES chat_history(conversation_uuid))")
 
-def save_to_duckdb(conn, conversation_uuid, prompt, full_response, search_results, texts, urls, context_keyword, context_reranker, re_written_prompt):
-    # Save data without explicit transaction management
-    conn.execute("INSERT INTO chat_history (conversation_uuid, user_input, response) VALUES (?, ?, ?)", (conversation_uuid, prompt, full_response))
-    # Save search results to DuckDB
-    conn.execute("INSERT INTO search_results (conversation_uuid, search_result) VALUES (?, ?)", (conversation_uuid, search_results))
-    # Save fetched texts to DuckDB
-    for text, url in zip(texts, urls):
-        # Check if the URL already exists in the database
-        existing_text = conn.execute("SELECT text FROM fetched_texts WHERE url = ?", (url,)).fetchone()
-        if existing_text is None:
-            conn.execute("INSERT INTO fetched_texts (url, text) VALUES (?, ?)", (url, text))
-    # Save retrieved chunks (keyword search) to DuckDB
-    for chunk in context_keyword:
-        conn.execute("INSERT INTO retrieved_chunks (conversation_uuid, search_type, chunk) VALUES (?, ?, ?)", (conversation_uuid, 'keyword_search', chunk))
-    # Save retrieved chunks (reranked) to DuckDB
-    for chunk in context_reranker:
-        conn.execute("INSERT INTO retrieved_chunks (conversation_uuid, search_type, chunk) VALUES (?, ?, ?)", (conversation_uuid, 'reranked', chunk))
-    # Save re-written prompt to DuckDB
-    conn.execute("INSERT INTO re_written_prompt (conversation_uuid, re_written_prompt) VALUES (?, ?)", (conversation_uuid, re_written_prompt))
+# ============================================================================
+# Agent Execution
+# ============================================================================
 
-with duckdb.connect(database='pravah.db') as conn:  # Use context manager for connection
-    create_tables(conn)
 
-# Cache search query
-@lru_cache(maxsize=128)
-@traceable  # Add tracing to the search query function
-def cached_search_query(query, num_results=10):
-    if config.search_engine == 'tvly':
-        return search_query(query, api_key=config.search_tvly_api_key, num_results=num_results)
-    elif config.search_engine == 'brave':
-        brave_api_key = os.environ['BRAVE_API_KEY'] 
-        if brave_api_key is None:
-            raise ValueError("Please set the BRAVE_API_KEY environment variable")
-        return asyncio.run(search_query_brave(query, api_key=brave_api_key, num_results=num_results))
-    elif config.search_engine == 'duckduckgo':
-        return asyncio.run(search_query_duckduckgo(query, num_results=num_results))
+async def run_agent_stream(
+    query: str,
+    config: Config,
+    thread_id: str,
+    history_messages: list[dict] | None = None,
+):
+    """Run the agent and yield streaming events.
+
+    Args:
+        query: The current user query.
+        config: Application configuration.
+        thread_id: Unique conversation identifier.
+        history_messages: Previous messages in the conversation (for context).
+    """
+    from pravah.agent import app
+    from langchain_core.messages import HumanMessage, AIMessage
+
+    agent_config = {
+        "configurable": {
+            "thread_id": thread_id,
+        },
+        "recursion_limit": 25,
+    }
+
+    # Build message list with conversation history
+    messages = []
+
+    # Include previous messages for context
+    if history_messages:
+        for msg in history_messages:
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+            if role == "user":
+                messages.append(HumanMessage(content=content))
+            elif role == "assistant" and content:
+                messages.append(AIMessage(content=content))
+
+    # Add the current query
+    messages.append(HumanMessage(content=query))
+
+    inputs = {
+        "messages": messages,
+        "model": config.model,
+        "temperature": config.temperature,
+        "iteration_count": 0,
+        "documents": [],
+    }
+
+    async for event in app.astream_events(inputs, config=agent_config, version="v2"):
+        yield event
+
+
+def process_agent_response(
+    query: str,
+    config: Config,
+    thread_id: str,
+    history_messages: list[dict] | None = None,
+):
+    """Process agent response with streaming and tool visibility.
+
+    Args:
+        query: The current user query.
+        config: Application configuration.
+        thread_id: Unique conversation identifier.
+        history_messages: Previous messages for context.
+    """
+    # Create containers for dynamic content
+    status_container = st.status("Thinking...", expanded=True)
+    response_container = st.empty()
+
+    full_response = ""
+    tool_calls = []
+    current_tool = None
+    total_tokens_in = 0
+    total_tokens_out = 0
+
+    async def run():
+        nonlocal \
+            full_response, \
+            tool_calls, \
+            current_tool, \
+            total_tokens_in, \
+            total_tokens_out
+
+        async for event in run_agent_stream(query, config, thread_id, history_messages):
+            event_type = event.get("event", "")
+
+            # Handle different event types
+            if event_type == "on_chat_model_stream":
+                # Streaming LLM output (if model supports streaming)
+                data = event.get("data", {})
+                chunk = data.get("chunk")
+                if chunk:
+                    content = getattr(chunk, "content", "")
+                    if content:
+                        full_response += content
+                        response_container.markdown(full_response + "▌")
+
+            elif event_type == "on_chat_model_end":
+                # Capture response from chat model
+                # For streaming: this fires after stream completes
+                # For non-streaming: this is where we get the response
+                data = event.get("data", {})
+                output = data.get("output")
+                if output:
+                    content = ""
+                    # Handle AIMessage or dict output
+                    if hasattr(output, "content") and output.content:
+                        content = output.content
+                    elif isinstance(output, dict):
+                        content = output.get("content", "")
+
+                    # Only overwrite if we don't have streaming content yet
+                    # or if this is a new response after tool calls
+                    if content and (
+                        not full_response or len(content) > len(full_response)
+                    ):
+                        full_response = content
+                        response_container.markdown(full_response)
+
+                    # Extract token usage from response_metadata
+                    if hasattr(output, "response_metadata"):
+                        metadata = output.response_metadata
+                        if isinstance(metadata, dict):
+                            usage = metadata.get("token_usage") or metadata.get("usage")
+                            if usage:
+                                # Handle both dict and object-style usage (litellm returns objects)
+                                if hasattr(usage, "prompt_tokens"):
+                                    total_tokens_in += (
+                                        getattr(usage, "prompt_tokens", 0) or 0
+                                    )
+                                    total_tokens_out += (
+                                        getattr(usage, "completion_tokens", 0) or 0
+                                    )
+                                elif isinstance(usage, dict):
+                                    total_tokens_in += (
+                                        usage.get("prompt_tokens", 0)
+                                        or usage.get("input_tokens", 0)
+                                        or 0
+                                    )
+                                    total_tokens_out += (
+                                        usage.get("completion_tokens", 0)
+                                        or usage.get("output_tokens", 0)
+                                        or 0
+                                    )
+
+            elif event_type == "on_tool_start":
+                # Tool is starting
+                tool_name = event.get("name", "unknown")
+                tool_input = event.get("data", {}).get("input", {})
+                current_tool = {
+                    "name": tool_name,
+                    "input": tool_input,
+                    "start_time": datetime.now().isoformat(),
+                }
+
+                with status_container:
+                    st.write(f"**{tool_name}**")
+                    if isinstance(tool_input, dict):
+                        for k, v in tool_input.items():
+                            st.text(f"  {k}: {str(v)[:100]}...")
+                    else:
+                        st.text(f"  Input: {str(tool_input)[:100]}...")
+
+            elif event_type == "on_tool_end":
+                # Tool finished
+                tool_name = event.get("name", "unknown")
+                output = event.get("data", {}).get("output", "")
+
+                if current_tool:
+                    current_tool["output"] = str(output)[:500]
+                    current_tool["end_time"] = datetime.now().isoformat()
+                    tool_calls.append(current_tool)
+
+                with status_container:
+                    st.write(f"Done: {tool_name}")
+
+    # Run the async function
+    asyncio.run(run())
+
+    # Update status to complete
+    status_container.update(label="Complete", state="complete", expanded=False)
+
+    # Display final response
+    response_container.markdown(full_response)
+
+    return full_response, tool_calls, total_tokens_in, total_tokens_out
+
+
+# ============================================================================
+# Debug Panel
+# ============================================================================
+
+
+def render_debug_panel(thread_id: str):
+    """Render debug panel with conversation stats."""
+    if not st.session_state.get("show_debug", False):
+        return
+
+    from pravah.pricing import calculate_cost, format_cost, get_model_cost_tier
+
+    history = get_history_store()
+    stats = history.get_conversation_stats(thread_id)
+    config = st.session_state.get("config", Config())
+
+    # Calculate cost from tokens if we have them
+    tokens_in = stats["total_tokens_in"]
+    tokens_out = stats["total_tokens_out"]
+
+    if tokens_in and tokens_out:
+        estimated_cost = calculate_cost(config.model, tokens_in, tokens_out)
     else:
-        raise ValueError("Unsupported search engine")
+        estimated_cost = None
 
-# Fetch text from URL
-@lru_cache(maxsize=128)
-@traceable  # Add tracing to the fetch text function
-async def fetch_text(session, url):
-    return await get_text_from_url(url, search_type=config.search_type, markdown=config.markdown)
+    with st.expander("Debug Info", expanded=False):
+        col1, col2, col3, col4, col5 = st.columns(5)
+        with col1:
+            st.metric("Messages", stats["message_count"])
+        with col2:
+            total_tokens = (tokens_in or 0) + (tokens_out or 0)
+            st.metric("Total Tokens", f"{total_tokens:,}" if total_tokens else "N/A")
+        with col3:
+            st.metric("In / Out", f"{tokens_in or 0:,} / {tokens_out or 0:,}")
+        with col4:
+            latency = stats["avg_latency_ms"]
+            st.metric("Avg Latency", f"{latency:,.0f}ms" if latency else "N/A")
+        with col5:
+            cost_str = format_cost(estimated_cost)
+            tier = get_model_cost_tier(config.model)
+            st.metric("Est. Cost", cost_str, delta=tier, delta_color="off")
 
-# Fetch all texts from URLs
-@traceable  # Add tracing to the fetch all texts function
-async def fetch_all_texts(urls):
-    async with aiohttp.ClientSession() as session:
-        tasks = [fetch_text(session, url) for url in urls]
-        return await asyncio.gather(*tasks)
 
-def display_intermediate_result(message):
-    with st.empty():
-        st.info(message)
+# ============================================================================
+# Chat Interface
+# ============================================================================
+
+
+def render_chat_message(message: dict):
+    """Render a single chat message."""
+    role = message["role"]
+    content = message["content"]
+
+    with st.chat_message(role):
+        st.markdown(content)
+
+        # Show tool calls if present
+        if "tool_calls" in message and message["tool_calls"]:
+            with st.expander("Tool calls", expanded=False):
+                for tool in message["tool_calls"]:
+                    st.text(f"Tool: {tool['name']}")
+                    if "input" in tool:
+                        st.json(tool["input"])
+
+
+def render_chat_history():
+    """Render the chat history."""
+    messages = st.session_state.get("messages", [])
+
+    for message in messages:
+        render_chat_message(message)
+
+
+# ============================================================================
+# Main Application
+# ============================================================================
 
 
 def main():
-    st.set_page_config(page_title="Pravaha", page_icon=":ocean:", layout="wide")
-    
-    # Add custom CSS
-    st.markdown(
-        """
-        <style>
-        .css-18e3th9 {
-            padding-top: 2rem;
-        }
-        .css-1d391kg {
-            padding-top: 2rem;
-        }
-        .css-1v3fvcr {
-            padding-top: 2rem;
-        }
-        .css-1cpxqw2 {
-            padding-top: 2rem;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+    """Main application entry point."""
 
-    # Add logo/image
-    st.image("assets/pravha.png", width=200)  # Update the path to your logo
-
-    st.title("Pravaha")
-    
-    # Setup configuration and check API keys
-    config = setup_config_and_check_api_keys()
-
-    # Initialize the main RunTree
-    main_run = RunTree(name="pravah Run", run_type="chain", inputs={"config": config})
-
-    # Chat input
-    # Initialize chat history
+    # Initialize session state
     if "messages" not in st.session_state:
         st.session_state.messages = []
-    if "previous_prompt" not in st.session_state:
-        st.session_state.previous_prompt = ""
-    previous_prompt = st.session_state.previous_prompt
-    
-    if st.sidebar.button("Reset Chat"):
-        st.session_state.messages = []
-        st.session_state.current_context = []
-        st.session_state.previous_prompt = ""
-        st.rerun()
-        
-    # Display chat history
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
 
-    if prompt := st.chat_input("What is your question?"):
-        # Generate UUID for the conversation
-        conversation_uuid = uuid.uuid4()
-        
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        
-        # Step 1: Rewriting the Prompt
-        rewrite_run = main_run.create_child(name="Rewriting Prompt", run_type="llm", inputs={"prompt": prompt})
-        if previous_prompt != '':
-            re_written_prompt = extract_rewritten_prompt(completion_llm(query_rewriter(prompt, previous_prompt, st.session_state.messages),
-                                                                        model=config.rewrite_model,
-                                                                        temperature=config.rewrite_model_temperature, stream=False))
-        else:
-            re_written_prompt = extract_rewritten_prompt(completion_llm(query_rewriter(prompt,None, None),
-                                                                model=config.rewrite_model,
-                                                                temperature=config.rewrite_model_temperature, stream=False))
-        print("************")
-        print(re_written_prompt)
-        print("************")
-        rewrite_run.end(outputs={"re_written_prompt": re_written_prompt})
-        
-        
+    if "thread_id" not in st.session_state:
+        st.session_state.thread_id = str(uuid.uuid4())
+
+    # Render sidebar and get config
+    config = render_sidebar()
+
+    # Main content area
+    st.title("Pravah")
+    st.caption("AI-powered search that synthesizes information from multiple sources")
+
+    # Check API keys
+    required_keys = get_required_api_keys(config.model)
+    key_status = check_api_keys(required_keys)
+
+    if not all(key_status.values()):
+        missing = [k for k, v in key_status.items() if not v]
+        st.warning(
+            f"Please configure the following API keys in the sidebar: {', '.join(missing)}"
+        )
+        st.stop()
+
+    # Debug panel (shows conversation stats when enabled)
+    render_debug_panel(st.session_state.thread_id)
+
+    # Render chat history
+    render_chat_history()
+
+    # Chat input
+    if prompt := st.chat_input("Ask me anything..."):
+        history = get_history_store()
+        thread_id = st.session_state.thread_id
+
+        # Add user message to session and DB
+        st.session_state.messages.append(
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        )
+        history.add_message(thread_id, "user", prompt)
+        history.update_conversation_model(thread_id, config.model)
+
+        # Display user message
         with st.chat_message("user"):
             st.markdown(prompt)
 
+        # Generate response
         with st.chat_message("assistant"):
-            # Create a placeholder for intermediate results
-            intermediate_placeholder = st.empty()
-            
-            # Create a placeholder for the final response
-            response_placeholder = st.empty()
+            try:
+                import time
 
-            full_response = ""
+                start_time = time.time()
 
-            # Function to update intermediate results
-            def update_intermediate(message):
-                intermediate_placeholder.info(message)
-
-            # Search for relevant context
-            update_intermediate("Searching for relevant context...")
-            
-            # Step 2: Search Query (Keyword or Combined Search)
-            search_run = main_run.create_child(name="Search Query", run_type="chain", inputs={"re_written_prompt": re_written_prompt})
-            search_results = cached_search_query(re_written_prompt)
-            search_run.end(outputs={"search_results": search_results})
-
-            # Fetch texts from search results
-            update_intermediate("Fetching texts from search results...")
-            urls = [result['url'] for result in search_results['results']]
-            
-            fetch_run = main_run.create_child(name="Fetch Texts", run_type="chain", inputs={"urls": urls})
-            texts = asyncio.run(fetch_all_texts(urls))
-            dict_of_texts = [{'content': text, 'url': url} for text, url in zip(texts, urls)]
-            fetch_run.end(outputs={"texts": dict_of_texts})
-
-            update_intermediate(f"Fetched {len(dict_of_texts)} texts")
-
-            # Initialize RetrievalEngine
-            update_intermediate("Initializing RetrievalEngine with fetched texts...")
-            retrieval = RetrievalEngine(
-                dict_of_texts,
-                uuid_input=str(conversation_uuid),
-                chunking_method=config.chunking_method,
-                chunk_size=config.chunk_size,
-                overlap=config.overlap,
-                use_lancedb=config.use_lancedb, 
-                reranker=Reranker(
-                    config.reranker, 
-                    lang='en', 
-                    api_key=os.environ.get('COHERE_API_KEY') if config.reranker == 'cohere' else None
+                # Pass previous messages for conversation context
+                # Exclude the just-added user message (it's in the query)
+                previous_messages = (
+                    st.session_state.messages[:-1]
+                    if len(st.session_state.messages) > 1
+                    else None
                 )
-            ) 
-            # Perform keyword search
-            # update_intermediate("Performing keyword search on the input query...")
-            # context_keyword = asyncio.run(retrieval.keyword_search(prompt, config.keyword_search_limit))
 
-            # # Rank the context
-            # update_intermediate('Ranking the context...')
-            # context_reranker = asyncio.run(retrieval.rerank_chunks(prompt, context_keyword, config.rerank_limit))
-            
-            # Step 3: Combined Search
-            combined_search_run = main_run.create_child(name="Combined Search", run_type="chain", inputs={"prompt": prompt})
-            context_reranker = asyncio.run(retrieval.combined_search(prompt, config.rerank_limit))
-            combined_search_run.end(outputs={"context_reranker": context_reranker})
-            
-            context_keyword = []
-            update_intermediate("Generating prompt template...")
-            prompt_template = generate_prompt_template(prompt, context_reranker, extra_context={'search_query': re_written_prompt})
+                response, tool_calls, tokens_in, tokens_out = process_agent_response(
+                    prompt,
+                    config,
+                    thread_id,
+                    history_messages=previous_messages,
+                )
 
-            # Get completion from LLM
-            update_intermediate("Getting completion from LLM...")
-            
-            # Step 4: Streaming Final Output
-            stream_run = main_run.create_child(name="Streaming Final Output", run_type="llm", inputs={"prompt_template": prompt_template})
-            stream = completion_llm(prompt_template, model=config.model, temperature=config.temperature, stream=True)
+                latency_ms = int((time.time() - start_time) * 1000)
 
-            # Clear the intermediate placeholder
-            intermediate_placeholder.empty()
+                # Add assistant message to session and DB
+                st.session_state.messages.append(
+                    {
+                        "role": "assistant",
+                        "content": response,
+                        "tool_calls": tool_calls,
+                    }
+                )
+                history.add_message(
+                    thread_id,
+                    "assistant",
+                    response,
+                    tool_calls=tool_calls,
+                    latency_ms=latency_ms,
+                    tokens_in=tokens_in if tokens_in else None,
+                    tokens_out=tokens_out if tokens_out else None,
+                )
 
-            # Display the streaming response
-            for chunk in stream:
-                if chunk.choices[0].delta.content is not None:
-                    full_response += chunk.choices[0].delta.content
-                    response_placeholder.markdown(full_response + "▌")
+            except Exception as e:
+                error_msg = f"An error occurred: {str(e)}"
+                st.error(error_msg)
+                error_response = f"I encountered an error: {str(e)}. Please try again."
+                st.session_state.messages.append(
+                    {
+                        "role": "assistant",
+                        "content": error_response,
+                    }
+                )
+                history.add_message(thread_id, "assistant", error_response)
 
-            response_placeholder.empty()
-            # Display the final response
-            response_placeholder.markdown(full_response)
-            stream_run.end(outputs={"final_output": full_response})
+    # Welcome message if no messages
+    if not st.session_state.messages:
+        st.markdown("""
+        ### Welcome to Pravah
         
-        st.session_state.messages.append({"role": "assistant", "content": full_response})
-        st.session_state.previous_prompt = re_written_prompt
+        An AI search engine that finds and synthesizes information from the web.
         
-        with duckdb.connect(database='pravah.db') as conn:  
-            save_to_duckdb(conn, conversation_uuid, prompt, full_response, search_results, texts, urls, context_keyword, context_reranker, re_written_prompt)
+        **Capabilities:**
+        - Search the web for current information
+        - Read and summarize articles
+        - Perform calculations
+        - Cite all sources
+        
+        **Try asking:**
+        - "What are the new features in Python 3.13?"
+        - "Compare React and Vue.js for web development"
+        - "Latest news about AI regulation"
+        
+        Type your question below to get started.
+        """)
 
 
-        main_run.end(outputs={"final_output": full_response})  # Ensure the RunTree is properly ended
-
-    # Right-side panel for visualizing and bringing history back
-    st.sidebar.header("Visualize and Use History")
-    with duckdb.connect(database='pravah.db') as conn:  
-        chat_history = conn.execute("SELECT user_input, response FROM chat_history").fetchall()
-    previous_queries = [f"{chat[0]}" for chat in chat_history]
-    selected_history = st.sidebar.selectbox("Select a history to use", previous_queries)
-    if st.sidebar.button("Use Selected History"):
-        with duckdb.connect(database='pravah.db') as conn:  
-            selected_chat = conn.execute("SELECT * FROM chat_history WHERE user_input = ?", (selected_history,)).fetchone()
-        st.session_state.current_context = selected_chat
-        st.session_state.messages.append({"role": "user", "content": selected_chat[1]})
-        st.session_state.messages.append({"role": "assistant", "content": selected_chat[2]})
-        st.session_state.previous_prompt = selected_chat[1]
-        st.rerun()
-        previous_prompt = selected_chat[1]
+# ============================================================================
+# Entry Point
+# ============================================================================
 
 if __name__ == "__main__":
     main()

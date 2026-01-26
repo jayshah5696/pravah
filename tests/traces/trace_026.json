@@ -1,0 +1,19 @@
+{
+  "query": "What is the speed of light?",
+  "query_id": "026",
+  "model": "openai/gpt-4o-mini",
+  "timestamp": "2026-01-25T22:37:22.297822",
+  "tool_calls": [],
+  "tool_outputs": [],
+  "model_outputs": [
+    {
+      "step": 1,
+      "content": "The speed of light in a vacuum is approximately **299,792,458 meters per second** (m/s). This value is often rounded to **3.00 x 10^8 m/s** for simplicity in calculations. \n\nIn various contexts, the speed of light is denoted by the symbol **c** and is a fundamental constant in physics, playing a crucial role in the theories of relativity and electromagnetism."
+    }
+  ],
+  "errors": [],
+  "final_response": "The speed of light in a vacuum is approximately **299,792,458 meters per second** (m/s). This value is often rounded to **3.00 x 10^8 m/s** for simplicity in calculations. \n\nIn various contexts, the speed of light is denoted by the symbol **c** and is a fundamental constant in physics, playing a crucial role in the theories of relativity and electromagnetism.",
+  "latency_seconds": 1.53,
+  "tool_call_count": 0,
+  "has_citations": false
+}

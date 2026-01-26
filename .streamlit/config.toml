@@ -1,0 +1,32 @@
+# Streamlit configuration for Pravah
+
+[theme]
+# Primary accent color (used for widgets like buttons, sliders)
+primaryColor = "#4A90D9"
+
+# Background color for the main content area
+backgroundColor = "#FFFFFF"
+
+# Background color for sidebar and most interactive widgets
+secondaryBackgroundColor = "#F5F7FA"
+
+# Color used for text
+textColor = "#1E1E1E"
+
+# Font family (sans serif for clean look)
+font = "sans serif"
+
+[server]
+# XSRF protection (CORS is auto-enabled when this is true)
+enableXsrfProtection = true
+
+# Maximum upload size in MB
+maxUploadSize = 50
+
+[browser]
+# Collect usage statistics (disabled for privacy)
+gatherUsageStats = false
+
+[runner]
+# Re-run on file changes during development
+fastReruns = true

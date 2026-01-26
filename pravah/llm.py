@@ -1,9 +1,13 @@
-from litellm import completion
-from rich.pretty import pprint
 import os
+
 # Load environment variables from .env file
-from dotenv import load_dotenv
+import litellm
+from litellm import completion
 from tenacity import retry, stop_after_attempt, wait_fixed
+
+litellm.vertex_project='sparkcognition-apm-dev'
+litellm.vertex_location='us-east5'
+
 
 # Safely get the API key
 # api_key = os.getenv('GROQ_API_KEY')

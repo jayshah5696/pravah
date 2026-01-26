@@ -1,0 +1,19 @@
+{
+  "query": "Who won the Super Bowl in 2024?",
+  "query_id": "005",
+  "model": "gemini/gemini-2.0-flash",
+  "timestamp": "2026-01-25T23:47:44.875617",
+  "tool_calls": [],
+  "tool_outputs": [],
+  "model_outputs": [
+    {
+      "step": 1,
+      "content": "The Kansas City Chiefs won Super Bowl LVIII in 2024. [CBS Sports](https://www.cbssports.com/nfl/news/super-bowl-2024-chiefs-beat-49ers-in-overtime-for-second-straight-title/)\n"
+    }
+  ],
+  "errors": [],
+  "final_response": "The Kansas City Chiefs won Super Bowl LVIII in 2024. [CBS Sports](https://www.cbssports.com/nfl/news/super-bowl-2024-chiefs-beat-49ers-in-overtime-for-second-straight-title/)\n",
+  "latency_seconds": 0.86,
+  "tool_call_count": 0,
+  "has_citations": true
+}

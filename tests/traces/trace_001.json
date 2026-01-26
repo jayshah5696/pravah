@@ -1,0 +1,19 @@
+{
+  "query": "What is the capital of France?",
+  "query_id": "001",
+  "model": "gemini/gemini-2.0-flash",
+  "timestamp": "2026-01-25T23:47:31.515220",
+  "tool_calls": [],
+  "tool_outputs": [],
+  "model_outputs": [
+    {
+      "step": 1,
+      "content": "The capital of France is Paris.\n"
+    }
+  ],
+  "errors": [],
+  "final_response": "The capital of France is Paris.\n",
+  "latency_seconds": 1.17,
+  "tool_call_count": 0,
+  "has_citations": false
+}

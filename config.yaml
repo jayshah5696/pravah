@@ -1,0 +1,66 @@
+# Pravah Configuration
+# Edit this file to customize available models and default settings
+
+# Default settings
+defaults:
+  model: "gemini/gemini-2.0-flash"  # Stable model with tool support
+  temperature: 0.3
+  max_search_results: 5
+
+# Available models grouped by provider
+# Format: provider/model-name
+# API key environment variables are auto-detected from provider prefix
+models:
+  # OpenAI - requires OPENAI_API_KEY
+  - name: "openai/gpt-5-nano-2025-08-07"
+    description: "Latest GPT-5 Nano model"
+  - name: "openai/gpt-4o"
+    description: "Most capable GPT-4o model"
+  - name: "openai/gpt-4o-mini"
+    description: "Fast and cost-effective"
+  - name: "openai/o3-mini"
+    description: "Reasoning model"
+
+  # Anthropic - requires ANTHROPIC_API_KEY
+  - name: "anthropic/claude-sonnet-4-20250514"
+    description: "Latest Claude Sonnet"
+  - name: "anthropic/claude-3-5-haiku-20241022"
+    description: "Fast Claude model"
+
+  # Google Gemini - requires GEMINI_API_KEY
+  # Note: "thinking" models (preview) may have issues with tool calling
+  - name: "gemini/gemini-2.0-flash"
+    description: "Stable Gemini with tool support"
+  - name: "gemini/gemini-3-flash-preview"
+    description: "Latest Gemini 3 (may have tool issues)"
+  - name: "gemini/gemini-1.5-pro"
+    description: "Gemini 1.5 Pro"
+
+  # Groq - requires GROQ_API_KEY (very fast inference)
+  - name: "groq/llama-3.3-70b-versatile"
+    description: "Large Llama on Groq"
+  - name: "groq/llama-3.1-8b-instant"
+    description: "Ultra-fast small model"
+
+  # DeepSeek - requires DEEPSEEK_API_KEY
+  - name: "deepseek/deepseek-chat"
+    description: "DeepSeek chat model"
+
+# API key mappings (provider prefix -> env var name)
+# Used to check which keys are configured
+api_keys:
+  openai: "OPENAI_API_KEY"
+  anthropic: "ANTHROPIC_API_KEY"
+  gemini: "GEMINI_API_KEY"
+  groq: "GROQ_API_KEY"
+  deepseek: "DEEPSEEK_API_KEY"
+  cohere: "COHERE_API_KEY"
+  # Search tool API keys
+  tavily: "TVLY_API_KEY"         # For web_search tool (Tavily)
+  google: "GOOGLE_API_KEY"       # For gemini_search tool (Gemini grounded search)
+
+# UI settings
+ui:
+  page_title: "Pravah - AI Search Engine"
+  page_icon: "assets/pravha.png"
+  show_debug_panel: false  # Toggle in sidebar to show token/cost info

@@ -1,0 +1,19 @@
+{
+  "query": "Symptoms of COVID-19",
+  "query_id": "029",
+  "model": "openai/gpt-4o-mini",
+  "timestamp": "2026-01-25T22:37:44.534021",
+  "tool_calls": [],
+  "tool_outputs": [],
+  "model_outputs": [
+    {
+      "step": 1,
+      "content": "COVID-19 symptoms can vary widely among individuals, but common symptoms include:\n\n1. **Respiratory Symptoms**:\n   - Cough\n   - Shortness of breath or difficulty breathing\n   - Sore throat\n\n2. **Fever and Chills**:\n   - Fever (temperature of 100.4\u00b0F or higher)\n   - Chills\n\n3. **Fatigue**:\n   - Tiredness or exhaustion\n\n4. **Muscle or Body Aches**:\n   - Generalized pain or discomfort\n\n5. **Headache**:\n   - Persistent or severe headaches\n\n6. **Loss of Taste or Smell**:\n   - Anosmia (loss of smell) or ageusia (loss of taste)\n\n7. **Gastrointestinal Symptoms**:\n   - Nausea or vomiting\n   - Diarrhea\n\n8. **Skin Symptoms**:\n   - Rashes or discoloration of fingers or toes (less common)\n\n9. **Neurological Symptoms**:\n   - Confusion or difficulty concentrating (in severe cases)\n\nSymptoms typically appear 2-14 days after exposure to the virus. While many people experience mild to moderate symptoms, some may develop severe illness, particularly older adults and those with underlying health conditions.\n\nFor the most accurate and up-to-date information, it's advisable to consult health authorities like the World Health Organization (WHO) or the Centers for Disease Control and Prevention (CDC)."
+    }
+  ],
+  "errors": [],
+  "final_response": "COVID-19 symptoms can vary widely among individuals, but common symptoms include:\n\n1. **Respiratory Symptoms**:\n   - Cough\n   - Shortness of breath or difficulty breathing\n   - Sore throat\n\n2. **Fever and Chills**:\n   - Fever (temperature of 100.4\u00b0F or higher)\n   - Chills\n\n3. **Fatigue**:\n   - Tiredness or exhaustion\n\n4. **Muscle or Body Aches**:\n   - Generalized pain or discomfort\n\n5. **Headache**:\n   - Persistent or severe headaches\n\n6. **Loss of Taste or Smell**:\n   - Anosmia (loss of smell) or ageusia (loss of taste)\n\n7. **Gastrointestinal Symptoms**:\n   - Nausea or vomiting\n   - Diarrhea\n\n8. **Skin Symptoms**:\n   - Rashes or discoloration of fingers or toes (less common)\n\n9. **Neurological Symptoms**:\n   - Confusion or difficulty concentrating (in severe cases)\n\nSymptoms typically appear 2-14 days after exposure to the virus. While many people experience mild to moderate symptoms, some may develop severe illness, particularly older adults and those with underlying health conditions.\n\nFor the most accurate and up-to-date information, it's advisable to consult health authorities like the World Health Organization (WHO) or the Centers for Disease Control and Prevention (CDC).",
+  "latency_seconds": 5.02,
+  "tool_call_count": 0,
+  "has_citations": false
+}

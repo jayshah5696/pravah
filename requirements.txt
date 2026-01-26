@@ -19,3 +19,4 @@ brave-search
 lancedb
 tantivy
 cohere
+google-genai

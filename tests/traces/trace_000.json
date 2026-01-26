@@ -1,0 +1,19 @@
+{
+  "query": "What is the capital of France?",
+  "query_id": "000",
+  "timestamp": "2026-01-25T22:07:35.290261",
+  "messages": [],
+  "tool_calls": [],
+  "tool_outputs": [],
+  "model_outputs": [
+    {
+      "step": 1,
+      "content": "The capital of France is Paris."
+    }
+  ],
+  "errors": [],
+  "final_response": "The capital of France is Paris.",
+  "latency_seconds": 0.81,
+  "tool_call_count": 0,
+  "has_citations": false
+}

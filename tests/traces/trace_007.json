@@ -1,0 +1,19 @@
+{
+  "query": "Who are you?",
+  "query_id": "007",
+  "model": "gemini/gemini-2.0-flash",
+  "timestamp": "2026-01-25T23:47:46.265442",
+  "tool_calls": [],
+  "tool_outputs": [],
+  "model_outputs": [
+    {
+      "step": 1,
+      "content": "I am Pravah, an advanced AI Search Engine designed to provide accurate, comprehensive, and well-cited answers. I can search the web, read articles, and synthesize information from multiple sources into a coherent answer with proper citations.\n"
+    }
+  ],
+  "errors": [],
+  "final_response": "I am Pravah, an advanced AI Search Engine designed to provide accurate, comprehensive, and well-cited answers. I can search the web, read articles, and synthesize information from multiple sources into a coherent answer with proper citations.\n",
+  "latency_seconds": 0.79,
+  "tool_call_count": 0,
+  "has_citations": false
+}

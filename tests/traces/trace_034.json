@@ -1,0 +1,19 @@
+{
+  "query": "Tell me about it",
+  "query_id": "034",
+  "model": "openai/gpt-4o-mini",
+  "timestamp": "2026-01-25T22:38:37.820873",
+  "tool_calls": [],
+  "tool_outputs": [],
+  "model_outputs": [
+    {
+      "step": 1,
+      "content": "Hello! I'd be happy to help, but I need a bit more context about what you're interested in. Could you please specify the topic or subject you'd like to know more about?"
+    }
+  ],
+  "errors": [],
+  "final_response": "Hello! I'd be happy to help, but I need a bit more context about what you're interested in. Could you please specify the topic or subject you'd like to know more about?",
+  "latency_seconds": 1.2,
+  "tool_call_count": 0,
+  "has_citations": false
+}

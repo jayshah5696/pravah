@@ -1,0 +1,19 @@
+{
+  "query": "Who is the CEO of OpenAI?",
+  "query_id": "002",
+  "model": "gemini/gemini-2.0-flash",
+  "timestamp": "2026-01-25T23:47:32.682881",
+  "tool_calls": [],
+  "tool_outputs": [],
+  "model_outputs": [
+    {
+      "step": 1,
+      "content": "The CEO of OpenAI is Sam Altman.\n"
+    }
+  ],
+  "errors": [],
+  "final_response": "The CEO of OpenAI is Sam Altman.\n",
+  "latency_seconds": 0.53,
+  "tool_call_count": 0,
+  "has_citations": false
+}

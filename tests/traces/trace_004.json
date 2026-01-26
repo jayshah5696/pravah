@@ -1,0 +1,32 @@
+{
+  "query": "What is the weather in San Francisco today?",
+  "query_id": "004",
+  "model": "gemini/gemini-2.0-flash",
+  "timestamp": "2026-01-25T23:47:39.362936",
+  "tool_calls": [
+    {
+      "name": "gemini_search",
+      "args": {
+        "query": "weather in San Francisco today"
+      },
+      "id": "call_060468b0e70c443f819501e2a345"
+    }
+  ],
+  "tool_outputs": [
+    {
+      "name": "gemini_search",
+      "output": "content='**Answer:**\\nThe weather in San Francisco today, Sunday, January 25, 2026, is cloudy with a 0% chance of rain. The high temperature will be around 54\u00b0F (12\u00b0C) and the low will be around 43\u00b0F (6\u00b0C). Winds will be from the Northeast at 5 to 10 mph. The humidity is around 79% and the air quality is considered unhealthy for sensitive groups.\\n\\n**Sources:**\\n[1] accuweather.com\\n    URL: https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFVNlm5pmZEAAzVezZhzAXI-TaJaTYbiWXS6-2TMDYge5Rm_h73BM6mgEmAVVXFRm-mKJ5c1TS6aL9fbuhopg-ySc9Usr46OGsApECIyNWsFuL4ogD-FDQoOl-mlalhsePT9dv_edB4SIc98V7LG7eTYkXuC_jVSR1ExEXVz5vcBfa7hC3v8zBS\\n[2] wunderground.com\\n    URL: https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGPI1fVpgnO4Pw4tN4MsMq7sttpTyYgGz8SiP2rwuwkipCee3RA58hiOi1cgNwBU_qOZSF3ZfgbG4-V6HNyoZbOUNhG4W7FxcCfKPDESJ5Y_YJSdmQpDTfYgXjIy1g590t2WSrho9T2me5welQuDgSbhSk=\\n[3] sfchronicle.com\\n    URL: https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEDpbQPegw56JPUVKNXJ47rIyW4L_yK1hSkSeOirUpk7yWnU707We1O7tP_wn0moOe4t6F8wotD8hdtkI24dg3OoJFtw5oVuPoiXVKJmfA2s3v4IKxh_ZNobLELOhwZaQ==\\n[4] Weather information for San Francisco, CA, US\\n    URL: https://www.google.com/search?q=weather+in+San Francisco, CA,+US\\n\\n---\\n*To read a full article, use fetch_page with a source URL.*' name='gemini_search' tool_call_id='call_060468b0e70c443f819501e2a345'"
+    }
+  ],
+  "model_outputs": [
+    {
+      "step": 1,
+      "content": "The weather in San Francisco today, Sunday, January 25, 2026, is cloudy with a 0% chance of rain. The high temperature will be around 54\u00b0F (12\u00b0C) and the low will be around 43\u00b0F (6\u00b0C). Winds will be from the Northeast at 5 to 10 mph. The humidity is around 79% and the air quality is considered unhealthy for sensitive groups [accuweather.com](https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFVNlm5pmZEAAzVezZhzAXI-TaJaTYbiWXS6-2TMDYge5Rm_h73BM6mgEmAVVXFRm-mKJ5c1TS6aL9fbuhopg-ySc9Usr46OGsApECIyNWsFuL4ogD-FDQoOl-mlalhsePT9dv_edB4SIc98V7LG7eTYkXuC_jVSR1ExEXVz5vcBfa7hC3v8zBS), [wunderground.com](https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGPI1fVpgnO4Pw4tN4MsMq7sttpTyYgGz8SiP2rwuwkipCee3RA58hiOi1cgNwBU_qOZSF3ZfgbG4-V6HNyoZbOUNhG4W7FxcCfKPDESJ5Y_YJSdmQpDTfYgXjIy1g590t2WSrho9T2me5welQuDgSbhSk=), [sfchronicle.com](https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEDpbQPegw56JPUVKNXJ47rIyW4L_yK1hSkSeOirUpk7yWnU707We1O7tP_wn0moOe4t6F8wotD8hdtkI24dg3OoJFtw5oVuPoiXVKJmfA2s3v4IKxh_ZNobLELOhwZaQ==)."
+    }
+  ],
+  "errors": [],
+  "final_response": "The weather in San Francisco today, Sunday, January 25, 2026, is cloudy with a 0% chance of rain. The high temperature will be around 54\u00b0F (12\u00b0C) and the low will be around 43\u00b0F (6\u00b0C). Winds will be from the Northeast at 5 to 10 mph. The humidity is around 79% and the air quality is considered unhealthy for sensitive groups [accuweather.com](https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQFVNlm5pmZEAAzVezZhzAXI-TaJaTYbiWXS6-2TMDYge5Rm_h73BM6mgEmAVVXFRm-mKJ5c1TS6aL9fbuhopg-ySc9Usr46OGsApECIyNWsFuL4ogD-FDQoOl-mlalhsePT9dv_edB4SIc98V7LG7eTYkXuC_jVSR1ExEXVz5vcBfa7hC3v8zBS), [wunderground.com](https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQGPI1fVpgnO4Pw4tN4MsMq7sttpTyYgGz8SiP2rwuwkipCee3RA58hiOi1cgNwBU_qOZSF3ZfgbG4-V6HNyoZbOUNhG4W7FxcCfKPDESJ5Y_YJSdmQpDTfYgXjIy1g590t2WSrho9T2me5welQuDgSbhSk=), [sfchronicle.com](https://vertexaisearch.cloud.google.com/grounding-api-redirect/AUZIYQEDpbQPegw56JPUVKNXJ47rIyW4L_yK1hSkSeOirUpk7yWnU707We1O7tP_wn0moOe4t6F8wotD8hdtkI24dg3OoJFtw5oVuPoiXVKJmfA2s3v4IKxh_ZNobLELOhwZaQ==).",
+  "latency_seconds": 5.51,
+  "tool_call_count": 1,
+  "has_citations": true
+}

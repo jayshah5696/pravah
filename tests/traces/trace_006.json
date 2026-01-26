@@ -1,0 +1,19 @@
+{
+  "query": "Hello!",
+  "query_id": "006",
+  "model": "gemini/gemini-2.0-flash",
+  "timestamp": "2026-01-25T23:47:45.731246",
+  "tool_calls": [],
+  "tool_outputs": [],
+  "model_outputs": [
+    {
+      "step": 1,
+      "content": "Hello! How can I help you today?\n"
+    }
+  ],
+  "errors": [],
+  "final_response": "Hello! How can I help you today?\n",
+  "latency_seconds": 0.53,
+  "tool_call_count": 0,
+  "has_citations": false
+}

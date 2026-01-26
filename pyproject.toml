@@ -1,37 +1,67 @@
-[tool.poetry]
+[project]
 name = "pravah"
-version = "0.1.0"
-description = "Search Engine powered by AI"
-authors = ["Jay Shah <jayshah5696@gmail.com>"]
+version = "2.0.0"
+description = "AI Search Engine - Agentic RAG powered by LangGraph"
+authors = [
+    { name = "Jay Shah", email = "jayshah5696@gmail.com" }
+]
 readme = "README.md"
-package-mode = false
+requires-python = ">=3.11"
+dependencies = [
+    # Core LLM & Agent
+    "litellm>=1.43.7",
+    "langgraph>=0.2.0",
+    "langchain-openai>=0.1.0",
+    "langchain-community>=0.2.0",
+    "langchain-core>=0.2.0",
+    "langsmith>=0.1.104",
+    # Checkpointing
+    "langgraph-checkpoint>=1.0.0",
+    "aiosqlite>=0.19.0",  # Required for async SQLite checkpointing
+    # Search & Retrieval
+    "tavily-python>=0.3.5",
+    "beautifulsoup4>=4.12.3",
+    "duckduckgo-search>=6.2.9",
+    "bm25s>=0.1.10",
+    "rerankers[flashrank]>=0.4.0",
+    "faiss-cpu>=1.8.0.post1",
+    # Vector DB (optional)
+    "lancedb>=0.12.0",
+    "tantivy>=0.22.0",
+    # LLM Providers
+    "openai>=1.0.0",
+    "anthropic>=0.34.2",
+    "cohere>=5.8.1",
+    "google-genai>=1.0.0",  # Google Gemini with grounded search
+    # Document Processing
+    "pymupdf4llm>=0.0.14",
+    "tiktoken>=0.7.0",
+    # UI & Web
+    "streamlit>=1.37.1",
+    "aiohttp>=3.10.3",
+    # Utilities
+    "jinja2>=3.1.4",
+    "rich>=13.7.1",
+    "python-dotenv>=1.0.0",
+    "tenacity>=8.0.0",
+    "pyyaml>=6.0",
+    # Storage
+    "duckdb>=1.0.0",
+    "fastavro>=1.9.5",
+    "langchain-litellm>=0.3.5",
+    "langgraph-checkpoint-sqlite>=3.0.3",
+]
 
-[tool.poetry.dependencies]
-python = "^3.11"
-litellm = "^1.43.7"
-jinja2 = "^3.1.4"
-aiohttp = "^3.10.3"
-rich = "^13.7.1"
-faiss-cpu = "^1.8.0.post1"
-fastavro = "^1.9.5"
-tiktoken = "^0.7.0"
-python-dotenv = "0.19.2"
-tavily-python = "0.3.5"
-rerankers = {extras = ["flashrank"], version = "^0.4.0"}
-streamlit = "^1.37.1"
-duckdb = "^1.0.0"
-beautifulsoup4 = "^4.12.3"
-duckduckgo-search = "^6.2.9"
-brave-search = "^0.2.0"
-bm25s = {extras = ["full"], version = "^0.1.10"}
-lancedb = "^0.12.0"
-tantivy = "^0.22.0"
-langsmith = "^0.1.104"
-cohere = "^5.8.1"
-anthropic = "^0.34.2"
-pymupdf4llm = "^0.0.14"
-
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "ruff>=0.1.0",
+]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pravah"]
