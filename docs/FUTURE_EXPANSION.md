@@ -1,135 +1,118 @@
-# Future Expansion & Improvement Roadmap
+# Future expansion roadmap
 
-This document outlines planned improvements and technical specifications for the next phase of Pravah's development. These features focus on UX enhancements, dynamic configuration, and extended capabilities.
+This is a planning document. No code changes in this file.
 
-## 1. Dynamic Welcome Experience
+## Roadmap todos
 
-**Goal:** Transform the static welcome message into a context-aware, dynamic dashboard.
+1. Dynamic welcome panel
+2. Dynamic model discovery and settings gating
+3. Pricing from litellm source of truth
+4. Unified API key validation
+5. Smart chat titles (slug, not raw query)
+6. File upload and local RAG
+7. Adaptive summarization tool for large tool outputs
 
-### Features
-- **Time-aware Greeting:** "Good Morning/Afternoon/Evening" based on user's local time.
-- **Live Context:** Display current date (e.g., "Monday, Jan 26, 2026") to help ground the user and the agent.
-- **System Pulse:** Status indicators for connected APIs (e.g., "🟢 OpenAI Ready", "🔴 Tavily Disconnected").
-- **"Did You Know?"**: Random pro-tips or capability highlights rotated on each session load.
+## 1. Dynamic welcome panel
 
-### Technical Implementation
-```python
-import datetime
+Goal: replace the static welcome copy with a time-aware panel.
 
-def render_dynamic_welcome():
-    now = datetime.datetime.now()
-    hour = now.hour
-    
-    if 5 <= hour < 12:
-        greeting = "Good Morning"
-    elif 12 <= hour < 18:
-        greeting = "Good Afternoon"
-    else:
-        greeting = "Good Evening"
-        
-    date_str = now.strftime("%A, %B %d, %Y")
-    
-    st.markdown(f"""
-    # {greeting}, Human.
-    ### It is {date_str}.
-    
-    System Status:
-    - {'🟢' if os.getenv("OPENAI_API_KEY") else '🔴'} OpenAI
-    - {'🟢' if os.getenv("TVLY_API_KEY") else '🔴'} Tavily Search
-    """)
-```
+Scope
+- Time-based greeting and date stamp.
+- Small status row for key services (LLM provider, search provider).
+- Short rotating tips (1 line) pulled from a local list.
 
-## 2. Dynamic Model Discovery
+Notes
+- Keep it light and factual. No marketing copy.
+- Date should be local to the user session.
 
-**Goal:** Eliminate hardcoded model lists by fetching available models directly from providers.
+## 2. Dynamic model discovery and settings gating
 
-### Features
-- **Auto-Discovery:** Query provider APIs (OpenAI `GET /models`, Anthropic, Gemini) to populate the model dropdown.
-- **Capability Filtering:** Only show models that support `chat` or `function_calling`.
-- **Smart Defaults:** If a configured model is deprecated or missing, fallback gracefully to a known stable model.
-- **Settings Hiding:** Hide "Temperature" or "Top P" settings if the selected model doesn't support them (e.g., reasoning models like o1).
+Goal: avoid hardcoded model lists and hide controls that do not apply.
 
-### Technical Implementation
-- Use `litellm.model_list` where supported, or direct SDK calls.
-- Cache the list for 24 hours to avoid API latency on every startup.
-- **filtering logic:**
-  ```python
-  # Example for OpenAI
-  models = client.models.list()
-  chat_models = [m.id for m in models if "gpt" in m.id]
-  ```
+Scope
+- Fetch model lists from provider APIs when available.
+- Cache results for a day to avoid slow startup.
+- Filter to chat-capable and tool-capable models.
+- Hide or disable settings such as Temperature or Top P when the model ignores them.
 
-## 3. Automated Cost & Pricing
+Notes
+- OpenAI: list models via SDK and filter by id patterns and metadata.
+- Anthropic and Gemini: use their model list endpoints where available.
+- Keep a safe fallback list if discovery fails.
 
-**Goal:** Use a single source of truth for model pricing instead of maintaining a manual dictionary.
+## 3. Pricing from litellm source of truth
 
-### Features
-- **Litellm Integration:** Leverage `litellm.model_cost` dictionary which is community-maintained and frequently updated.
-- **Real-time Estimates:** Calculate cost per session based on actual token usage + live pricing.
-- **Budget Alerts:** (Optional) Warn users if a session exceeds a certain dollar amount.
+Goal: use litellm pricing data instead of a manual table.
 
-### Technical Implementation
-```python
-from litellm import model_cost
+Scope
+- Read from litellm model pricing registry.
+- Convert to per-request cost using input and output tokens.
+- Show a single formatted cost in the debug panel.
 
-def get_real_cost(model_name, prompt_tokens, completion_tokens):
-    if model_name in model_cost:
-        input_price = model_cost[model_name]["input_cost_per_token"]
-        output_price = model_cost[model_name]["output_cost_per_token"]
-        return (prompt_tokens * input_price) + (completion_tokens * output_price)
-    return None
-```
+Notes
+- If litellm does not have a model entry, show "N/A" and do not guess.
 
-## 4. Unified API Key & Connection Manager
+## 4. Unified API key validation
 
-**Goal:** Centralized validation for *all* required services, not just search.
+Goal: validate all required keys in one place, not only search.
 
-### Features
-- **Global Health Check:** On app startup, dry-run all configured keys.
-- **Granular Feedback:** Instead of "API Error", show specific errors like "Invalid Permissions", "Quota Exceeded", or "Expired Key".
-- **Provider-Specific Checks:** 
-  - LLM: Simple "Hello" generation.
-  - Search: Simple "Test" query.
-  - Vector DB: Connection ping.
+Scope
+- Centralize required keys for each provider and tool.
+- Run a lightweight validation call per provider.
+- Surface clear status in the sidebar and the welcome panel.
 
-### Technical Implementation
-- Create a `ConnectionManager` class.
-- Run checks in parallel threads to not slow down startup.
-- Store status in `st.session_state` to show/hide relevant features (e.g., disable "Search" tool if Tavily fails, but keep Chat active).
+Notes
+- Validation should be fast and non-billing where possible.
+- Do not block the UI on slow providers; show a pending state.
 
-## 5. Smart Chat Titles (Auto-Slug)**
+## 5. Smart chat titles (slug, not raw query)
 
-**Goal:** Replace verbatim first-query titles with concise, summarized topics.
+Goal: replace raw user queries in the sidebar with short titles.
 
-### Features
-- **Auto-Summarization:** After the first 2-3 turns, generate a 3-5 word title.
-- **Async Generation:** Don't block the user; generate the title in the background or on the next refresh.
-- **Editable Titles:** Allow users to manually rename chats (already supported in backend, need UI).
+Scope
+- Generate a 3-5 word title after the first assistant response.
+- Use a small, low-cost model.
+- Store the slug in DuckDB and allow manual edit later.
 
-### Technical Implementation
-- Trigger a "Title Generation" chain after the first assistant response.
-- Use a small, cheap model (e.g., `gpt-4o-mini` or `llama-3-8b`) for this specific task.
-- **Prompt:** "Summarize the following conversation start into a 3-5 word title. Do not use quotes."
-- Update the `conversations` table in DuckDB with the new slug.
+Notes
+- Avoid quotes and punctuation in the title.
+- Keep titles stable once set.
 
-## 6. Document Uploads & RAG
+## 6. File upload and local RAG
 
-**Goal:** Allow users to chat with their own data.
+Goal: let users attach local files and query them during the session.
 
-### Features
-- **Multi-format Support:** PDF, CSV, TXT, MD.
-- **Session-scoped RAG:** Uploads are temporary for the current chat session (stored in `pravah.memory`).
-- **Hybrid Search:** Combine Web Search (Tavily) results with Local Document results.
+Scope
+- Add a file uploader in the sidebar.
+- Parse PDF, TXT, MD, CSV.
+- Chunk and index content per conversation.
+- Provide a local search tool for retrieval.
 
-### Technical Implementation
-- **UI:** `st.file_uploader`.
-- **Processing:** 
-  - `pymupdf` for PDFs.
-  - `pandas` for CSVs.
-- **Storage:** 
-  - Chunk text and store in the existing `MemoryStore` (from `pravah/memory.py`).
-  - Use `search_memory` tool to retrieve from these docs.
-- **Agent Update:** Provide a new tool `search_uploaded_docs` to the agent.
+Notes
+- Keep uploaded data session-scoped by default.
+- Provide a clear delete action for uploads.
+
+## 7. Adaptive summarization tool for large tool outputs
+
+Goal: when a tool response is too large, summarize with a smaller model and return only the needed parts.
+
+Scope
+- Add a tool wrapper for oversized outputs.
+- Use a fast, low-cost summarizer model.
+- Summarize to a target length and preserve citations.
+- Provide a "view full output" path on demand.
+
+Notes
+- Apply this to fetch_page and any future heavy tools.
+- Keep raw text in memory for follow-up questions.
+
+## UI follow-up from this request
+
+Question
+- The chat history in the sidebar grows without a scrollbar. Should it scroll?
+
+Answer
+- Yes. Use a fixed-height sidebar container and let the history list scroll inside it. Keep the header, search box, and footer controls fixed.
 
 ---
-*Created: January 2026*
+Created: January 2026
