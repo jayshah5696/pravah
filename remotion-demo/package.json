@@ -1,0 +1,24 @@
+{
+  "name": "pravah-demo",
+  "version": "1.0.0",
+  "description": "Pravah demo video created with Remotion",
+  "scripts": {
+    "start": "remotion preview src/index.tsx",
+    "build": "remotion render src/index.tsx PravahDemo out/demo.mp4",
+    "gif": "remotion render src/index.tsx PravahDemo out/demo.gif --codec gif",
+    "upgrade": "remotion upgrade"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@remotion/cli": "^4.0.410",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "remotion": "^4.0.410"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.27",
+    "typescript": "^5.9.3"
+  }
+}
