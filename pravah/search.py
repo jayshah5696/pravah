@@ -65,36 +65,42 @@ JINA_HEADERS = {
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(0.1), retry_error_callback=lambda retry_state: '')
-async def fetch_content(url: str) -> str:
+async def fetch_content(url: str, session: aiohttp.ClientSession = None) -> str:
     """Fetches the content from a given URL asynchronously.
 
     Args:
         url: The URL to fetch the content from.
+        session: An optional aiohttp.ClientSession to use for the request.
     Returns:
         The content of the page, or an empty string if an error occurs.
     """
     # await asyncio.sleep(random.randint(2, 5))  # Simulate human-like behavior with random sleep durations
     try:
         headers = {'User-Agent': random.choice(USER_AGENTS)}
-        async with aiohttp.ClientSession() as session:
-            if 'https://arxiv.org/abs/' in url:
-                url = url.replace('abs', 'pdf')
-            async with session.get(url, headers=headers) as response:
-                response.raise_for_status()
-                if url.endswith(".pdf") or 'https://arxiv.org/' in url:
-                    # Handle PDF content
-                    content = await response.read()
-                    md_text = pymupdf4llm.to_markdown(io.BytesIO(content))
-                    return md_text
-                else:
-                    # Handle other content types as before
-                    return await response.text()
+        if session is None:
+            async with aiohttp.ClientSession() as new_session:
+                return await _fetch_content_with_session(url, new_session, headers)
+        return await _fetch_content_with_session(url, session, headers)
     except aiohttp.ClientError as e:
         print(f"An error occurred while fetching content from {url}: {e}")
         return ''
     except UnicodeDecodeError as e:
         print(f"An error occurred while decoding content from {url}: {e}")
         return ''
+
+async def _fetch_content_with_session(url: str, session: aiohttp.ClientSession, headers: dict) -> str:
+    if 'https://arxiv.org/abs/' in url:
+        url = url.replace('abs', 'pdf')
+    async with session.get(url, headers=headers) as response:
+        response.raise_for_status()
+        if url.endswith(".pdf") or 'https://arxiv.org/' in url:
+            # Handle PDF content
+            content = await response.read()
+            md_text = pymupdf4llm.to_markdown(io.BytesIO(content))
+            return md_text
+        else:
+            # Handle other content types as before
+            return await response.text()
 def parse_content(content: str, markdown: bool = False) -> str:
     """Parses the HTML content to extract text and convert it to markdown format if enabled.
 
@@ -231,30 +237,36 @@ def fallback_to_simplified_parsing(content):
     return markdown_text
     
 
-async def get_text_from_url(url: str, search_type: str = 'default', markdown: bool = False) -> str:
+async def get_text_from_url(url: str, search_type: str = 'default', markdown: bool = False, session: aiohttp.ClientSession = None) -> str:
     """Fetches and parses the text content from a given URL asynchronously.
 
     Args:
         url: The URL to fetch the content from.
         search_type: The type of search to perform ('default' or 'jina').
         markdown: A flag to indicate whether to convert to markdown format.
+        session: An optional aiohttp.ClientSession to use for the request.
     Returns:
         The text content of the page, or an empty string if an error occurs.
     """
     if search_type == 'jina':
         headers = JINA_HEADERS  # Use the predefined JINA headers
-        content = await fetch_jina_content(url, headers)
+        content = await fetch_jina_content(url, headers, session=session)
     else:
-        content = await fetch_content(url)
+        content = await fetch_content(url, session=session)
 
     if content:
         return parse_content(content, markdown) if search_type == 'default' else content
     return ''
 
-async def fetch_jina_content(url: str, headers: dict) -> str:
+async def fetch_jina_content(url: str, headers: dict, session: aiohttp.ClientSession = None) -> str:
 
     url = f'https://r.jina.ai/{url}'
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, headers=headers) as response:
-            response.raise_for_status()
-            return await response.text()
+    if session is None:
+        async with aiohttp.ClientSession() as new_session:
+            return await _fetch_jina_with_session(url, headers, new_session)
+    return await _fetch_jina_with_session(url, headers, session)
+
+async def _fetch_jina_with_session(url: str, headers: dict, session: aiohttp.ClientSession) -> str:
+    async with session.get(url, headers=headers) as response:
+        response.raise_for_status()
+        return await response.text()
