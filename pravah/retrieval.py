@@ -199,15 +199,24 @@ class RetrievalEngine:
             return [self.chunks[i] for i in top_indices]
 
     
-    def normalize_scores(self, scores: np.ndarray) -> np.ndarray:
+    @staticmethod
+    def normalize_scores(scores: np.ndarray) -> np.ndarray:
         """Normalize an array of scores to a range between 0 and 1.
         Args:
             scores (np.ndarray): The array of scores to normalize.
         Returns:
             np.ndarray: The normalized scores."""
         # Find the minimum and maximum scores
+        if scores.size == 0:
+            return scores
+
         min_score = np.min(scores)
         max_score = np.max(scores)
+
+        # If all scores are the same, return an array of zeros
+        if max_score == min_score:
+            return np.zeros_like(scores)
+
         # Normalize the scores to a range between 0 and 1
         return (scores - min_score) / (max_score - min_score)
     
