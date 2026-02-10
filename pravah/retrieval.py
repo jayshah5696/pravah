@@ -41,7 +41,7 @@ class LiteLLMEmbeddingClient:
 @traceable
 class RetrievalEngine:
     def __init__(self, texts: List[dict],
-                uuid_input: str,
+                uuid_input: str = None,
                 chunk_size: int = 500,
                 overlap: int = 100,
                 chunking_method: str = 'tokens',
@@ -55,6 +55,15 @@ class RetrievalEngine:
         self.tokens = tokens
         self.use_lancedb = use_lancedb
         self.chunking_method = chunking_method
+        if uuid_input is not None:
+            try:
+                uuid.UUID(uuid_input)
+            except (ValueError, TypeError):
+                raise ValueError(f"Invalid UUID format: {uuid_input}")
+        elif use_lancedb:
+            uuid_input = str(uuid.uuid4())
+
+        self.uuid_input = uuid_input
         self.chunks = self.chunk_texts(texts, uuid_input=uuid_input)
         self.embed_client = embed_client
         self.embeddings = None
@@ -81,7 +90,6 @@ class RetrievalEngine:
                 chunked_texts = self.chunk_text(text, self.chunk_size, self.overlap)
             for chunk in chunked_texts:
                 chunks.append({'content': chunk, 'url': url, 'uuid': uuid_input})
-        self.uuid_input = uuid_input
         return chunks
 
     def chunk_text(self, text, max_char_length=1000, overlap=0):
@@ -324,21 +332,22 @@ class RetrievalEngine:
         self.tbl.create_fts_index("content",replace=True)
 
     async def lancedb_keyword_search(self, query: str, top_k: int = 5) -> List[dict]:
-        results = self.tbl.search(query, query_type='fts').where(f"uuid={self.uuid_input}").limit(top_k).to_list()
+        results = self.tbl.search(query, query_type='fts').where(f"uuid='{self.uuid_input}'").limit(top_k).to_list()
         return results
 
     async def lancedb_semantic_search(self, query: str, top_k: int = 5) -> List[dict]:
-        results = self.tbl.search(query, query_type='vector').where(f"uuid={self.uuid_input}").limit(top_k).to_list()
+        results = self.tbl.search(query, query_type='vector').where(f"uuid='{self.uuid_input}'").limit(top_k).to_list()
         return results
 
     async def lancedb_hybrid_search(self, query: str, top_k: int = 5) -> List[dict]:
-        results = self.tbl.search(query, query_type='hybrid').where(f"uuid={self.uuid_input}").limit(top_k).to_list()
+        results = self.tbl.search(query, query_type='hybrid').where(f"uuid='{self.uuid_input}'").limit(top_k).to_list()
         return results
 
     async def lancedb_combined_search(self, query: str, top_k: int = 5) -> List[dict]:
         from lancedb.rerankers import CohereReranker
         reranker = CohereReranker(column='content')
         results = (self.tbl.search(query, query_type='hybrid')
+                   .where(f"uuid='{self.uuid_input}'")
                    .limit(top_k*2)
                    .rerank(reranker=reranker).limit(top_k))
         return results.to_list()
