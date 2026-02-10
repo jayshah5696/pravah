@@ -33,6 +33,8 @@ class Config:
     rerank_limit: int = 10
     rewrite_model: str = 'groq/llama-3.1-8b-instant'
     rewrite_model_temperature: float = 0.1
+    title_model: str = 'groq/llama-3.1-8b-instant'
+    title_model_temperature: float = 0.1
     search_type: str = 'default' # or jina
     markdown: bool = True
     search_engine: str = 'tvly'
@@ -106,8 +108,8 @@ def check_api_keys(config):
     elif config.search_engine == 'brave':
         required_keys.append('BRAVE_API_KEY')
 
-    # Check API keys for both model and rewrite_model
-    for model in [config.model, config.rewrite_model]:
+    # Check API keys for both model, rewrite_model and title_model
+    for model in [config.model, config.rewrite_model, config.title_model]:
         key = check_model_key(model)
         if key:
             required_keys.append(key)
@@ -162,6 +164,10 @@ def setup_config_and_check_api_keys():
     with st.sidebar.expander("Rewrite Configuration", expanded=False):
         config.rewrite_model = st.text_input("Rewrite Model", config.rewrite_model, key='rewrite_model_input')
         config.rewrite_model_temperature = st.slider("Rewrite Model Temperature", 0.0, 1.0, config.rewrite_model_temperature, key='rewrite_model_temperature_slider')
+
+    with st.sidebar.expander("Title Configuration", expanded=False):
+        config.title_model = st.text_input("Title Model", config.title_model, key='title_model_input')
+        config.title_model_temperature = st.slider("Title Model Temperature", 0.0, 1.0, config.title_model_temperature, key='title_model_temperature_slider')
 
     with st.sidebar.expander("Reranker Configuration", expanded=False):
         config.reranker = st.selectbox("Reranker", ["cohere", "flashrank"], key='reranker_select')
@@ -409,7 +415,7 @@ def main():
         st.session_state.previous_prompt = re_written_prompt
         
         # Generate Title
-        title = generate_chat_title(prompt, full_response, model=config.rewrite_model, temperature=0.5)
+        title = generate_chat_title(prompt, full_response, model=config.title_model, temperature=config.title_model_temperature)
 
         with duckdb.connect(database='pravah.db') as conn:  
             save_to_duckdb(conn, conversation_uuid, prompt, full_response, search_results, texts, urls, context_keyword, context_reranker, re_written_prompt, title)
