@@ -10,7 +10,7 @@ import uuid
 from rerankers import Reranker
 from langsmith import traceable, Client
 load_dotenv()
-from pravah.llm import completion_llm
+from pravah.llm import completion_llm, generate_chat_title
 from pravah.prompts import generate_prompt_template, query_rewriter, extract_rewritten_prompt
 from pravah.retrieval import RetrievalEngine, LiteLLMEmbeddingClient
 from pravah.search import search_query, get_text_from_url, search_query_brave, search_query_duckduckgo
@@ -173,15 +173,20 @@ def setup_config_and_check_api_keys():
 
 def create_tables(conn):
     # Create tables without explicit transaction management
-    conn.execute("CREATE TABLE IF NOT EXISTS chat_history (conversation_uuid UUID PRIMARY KEY, user_input TEXT, response TEXT)")
+    conn.execute("CREATE TABLE IF NOT EXISTS chat_history (conversation_uuid UUID PRIMARY KEY, user_input TEXT, response TEXT, title TEXT)")
+    # Check if title column exists in chat_history and add it if not
+    try:
+        conn.execute("ALTER TABLE chat_history ADD COLUMN title TEXT")
+    except:
+        pass
     conn.execute("CREATE TABLE IF NOT EXISTS search_results (conversation_uuid UUID, search_result JSON, FOREIGN KEY(conversation_uuid) REFERENCES chat_history(conversation_uuid))")
     conn.execute("CREATE TABLE IF NOT EXISTS fetched_texts (url TEXT PRIMARY KEY, text TEXT)")
     conn.execute("CREATE TABLE IF NOT EXISTS retrieved_chunks (conversation_uuid UUID, search_type TEXT, chunk TEXT, FOREIGN KEY(conversation_uuid) REFERENCES chat_history(conversation_uuid))")
     conn.execute("CREATE TABLE IF NOT EXISTS re_written_prompt (conversation_uuid UUID, re_written_prompt TEXT, FOREIGN KEY(conversation_uuid) REFERENCES chat_history(conversation_uuid))")
 
-def save_to_duckdb(conn, conversation_uuid, prompt, full_response, search_results, texts, urls, context_keyword, context_reranker, re_written_prompt):
+def save_to_duckdb(conn, conversation_uuid, prompt, full_response, search_results, texts, urls, context_keyword, context_reranker, re_written_prompt, title):
     # Save data without explicit transaction management
-    conn.execute("INSERT INTO chat_history (conversation_uuid, user_input, response) VALUES (?, ?, ?)", (conversation_uuid, prompt, full_response))
+    conn.execute("INSERT INTO chat_history (conversation_uuid, user_input, response, title) VALUES (?, ?, ?, ?)", (conversation_uuid, prompt, full_response, title))
     # Save search results to DuckDB
     conn.execute("INSERT INTO search_results (conversation_uuid, search_result) VALUES (?, ?)", (conversation_uuid, search_results))
     # Save fetched texts to DuckDB
@@ -403,8 +408,11 @@ def main():
         st.session_state.messages.append({"role": "assistant", "content": full_response})
         st.session_state.previous_prompt = re_written_prompt
         
+        # Generate Title
+        title = generate_chat_title(prompt, full_response, model=config.rewrite_model, temperature=0.5)
+
         with duckdb.connect(database='pravah.db') as conn:  
-            save_to_duckdb(conn, conversation_uuid, prompt, full_response, search_results, texts, urls, context_keyword, context_reranker, re_written_prompt)
+            save_to_duckdb(conn, conversation_uuid, prompt, full_response, search_results, texts, urls, context_keyword, context_reranker, re_written_prompt, title)
 
 
         main_run.end(outputs={"final_output": full_response})  # Ensure the RunTree is properly ended
@@ -412,12 +420,25 @@ def main():
     # Right-side panel for visualizing and bringing history back
     st.sidebar.header("Visualize and Use History")
     with duckdb.connect(database='pravah.db') as conn:  
-        chat_history = conn.execute("SELECT user_input, response FROM chat_history").fetchall()
-    previous_queries = [f"{chat[0]}" for chat in chat_history]
-    selected_history = st.sidebar.selectbox("Select a history to use", previous_queries)
+        chat_history = conn.execute("SELECT conversation_uuid, user_input, title FROM chat_history").fetchall()
+
+    chat_options = {str(chat[0]): (chat[1], chat[2]) for chat in chat_history}
+
+    def get_display_name(uuid_str):
+        item = chat_options.get(uuid_str)
+        if not item:
+            return uuid_str
+        title = item[1]
+        user_input = item[0]
+        if title and title.strip():
+            return title
+        return user_input[:50] + "..." if len(user_input) > 50 else user_input
+
+    selected_uuid = st.sidebar.selectbox("Select a history to use", list(chat_options.keys()), format_func=get_display_name)
+
     if st.sidebar.button("Use Selected History"):
         with duckdb.connect(database='pravah.db') as conn:  
-            selected_chat = conn.execute("SELECT * FROM chat_history WHERE user_input = ?", (selected_history,)).fetchone()
+            selected_chat = conn.execute("SELECT * FROM chat_history WHERE conversation_uuid = ?", (selected_uuid,)).fetchone()
         st.session_state.current_context = selected_chat
         st.session_state.messages.append({"role": "user", "content": selected_chat[1]})
         st.session_state.messages.append({"role": "assistant", "content": selected_chat[2]})

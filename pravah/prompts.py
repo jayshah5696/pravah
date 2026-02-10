@@ -376,3 +376,36 @@ def query_rewriter(prompt, previous_prompt=None, messages=None):
     return rendered_output
 if __name__ == "__main__":
     main()
+
+def generate_title_prompt(prompt, response):
+    """
+    Generates a prompt for creating a short, catchy title for a conversation.
+
+    Parameters:
+    - prompt: The user's input prompt.
+    - response: The assistant's response.
+
+    Returns:
+    - A string containing the prompt for title generation.
+    """
+    env = Environment(loader=FileSystemLoader(''))
+    template_string = """
+    <instructions>
+    You are an expert at summarizing conversations into short, catchy titles.
+    Given a user prompt and an assistant response, generate a title of 3-5 words that captures the essence of the interaction.
+    Do not use quotes.
+    Just return the title.
+    </instructions>
+
+    <user_prompt>
+    {{ prompt }}
+    </user_prompt>
+
+    <assistant_response>
+    {{ response }}
+    </assistant_response>
+
+    <title>
+    """
+    template = env.from_string(template_string)
+    return template.render(prompt=prompt, response=response)
