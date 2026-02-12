@@ -16,11 +16,11 @@ def create_tables_v2(conn):
     conn.execute("CREATE TABLE IF NOT EXISTS retrieved_chunks (conversation_uuid UUID, search_type TEXT, chunk TEXT, FOREIGN KEY(conversation_uuid) REFERENCES chat_history(conversation_uuid))")
     conn.execute("CREATE TABLE IF NOT EXISTS re_written_prompt (conversation_uuid UUID, re_written_prompt TEXT, FOREIGN KEY(conversation_uuid) REFERENCES chat_history(conversation_uuid))")
 
-    # Migration to add title
+    # Migration: add title column for existing databases
     try:
         conn.execute("ALTER TABLE chat_history ADD COLUMN title TEXT")
-    except:
-        pass
+    except Exception:
+        pass  # Column already exists
 
 def test_create_tables_adds_title(db_connection):
     # Simulate existing table without title

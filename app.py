@@ -180,11 +180,11 @@ def setup_config_and_check_api_keys():
 def create_tables(conn):
     # Create tables without explicit transaction management
     conn.execute("CREATE TABLE IF NOT EXISTS chat_history (conversation_uuid UUID PRIMARY KEY, user_input TEXT, response TEXT, title TEXT)")
-    # Check if title column exists in chat_history and add it if not
+    # Migration: add title column for existing databases that lack it
     try:
         conn.execute("ALTER TABLE chat_history ADD COLUMN title TEXT")
-    except:
-        pass
+    except Exception:
+        pass  # Column already exists
     conn.execute("CREATE TABLE IF NOT EXISTS search_results (conversation_uuid UUID, search_result JSON, FOREIGN KEY(conversation_uuid) REFERENCES chat_history(conversation_uuid))")
     conn.execute("CREATE TABLE IF NOT EXISTS fetched_texts (url TEXT PRIMARY KEY, text TEXT)")
     conn.execute("CREATE TABLE IF NOT EXISTS retrieved_chunks (conversation_uuid UUID, search_type TEXT, chunk TEXT, FOREIGN KEY(conversation_uuid) REFERENCES chat_history(conversation_uuid))")
@@ -442,15 +442,18 @@ def main():
 
     selected_uuid = st.sidebar.selectbox("Select a history to use", list(chat_options.keys()), format_func=get_display_name)
 
-    if st.sidebar.button("Use Selected History"):
-        with duckdb.connect(database='pravah.db') as conn:  
-            selected_chat = conn.execute("SELECT * FROM chat_history WHERE conversation_uuid = ?", (selected_uuid,)).fetchone()
-        st.session_state.current_context = selected_chat
-        st.session_state.messages.append({"role": "user", "content": selected_chat[1]})
-        st.session_state.messages.append({"role": "assistant", "content": selected_chat[2]})
-        st.session_state.previous_prompt = selected_chat[1]
-        st.rerun()
-        previous_prompt = selected_chat[1]
+    if st.sidebar.button("Use Selected History") and selected_uuid:
+        with duckdb.connect(database='pravah.db') as conn:
+            selected_chat = conn.execute(
+                "SELECT user_input, response FROM chat_history WHERE conversation_uuid = ?",
+                (selected_uuid,)
+            ).fetchone()
+        if selected_chat:
+            st.session_state.current_context = selected_chat
+            st.session_state.messages.append({"role": "user", "content": selected_chat[0]})
+            st.session_state.messages.append({"role": "assistant", "content": selected_chat[1]})
+            st.session_state.previous_prompt = selected_chat[0]
+            st.rerun()
 
 if __name__ == "__main__":
     main()

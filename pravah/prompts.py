@@ -374,9 +374,6 @@ def query_rewriter(prompt, previous_prompt=None, messages=None):
     template = env.from_string(template_string)
     rendered_output = template.render(prompt=prompt, previous_prompt=previous_prompt, messages=messages)
     return rendered_output
-if __name__ == "__main__":
-    main()
-
 def generate_title_prompt(prompt, response):
     """
     Generates a prompt for creating a short, catchy title for a conversation.
@@ -388,7 +385,7 @@ def generate_title_prompt(prompt, response):
     Returns:
     - A string containing the prompt for title generation.
     """
-    env = Environment(loader=FileSystemLoader(''))
+    env = Environment()
     template_string = """
     <instructions>
     You are an expert at summarizing conversations into short, catchy titles.
@@ -409,3 +406,6 @@ def generate_title_prompt(prompt, response):
     """
     template = env.from_string(template_string)
     return template.render(prompt=prompt, response=response)
+
+if __name__ == "__main__":
+    main()
