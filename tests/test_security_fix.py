@@ -1,5 +1,5 @@
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 
 # Mock dependencies that are not installed before importing RetrievalEngine
 sys.modules['numpy'] = MagicMock()
@@ -46,11 +46,36 @@ def test_retrieval_engine_invalid_uuid(mock_dependencies):
     with pytest.raises(ValueError, match="Invalid UUID format"):
         RetrievalEngine(texts, uuid_input=invalid_uuid, use_lancedb=True)
 
+def test_retrieval_engine_rejects_sql_injection_payload(mock_dependencies):
+    """Verify that SQL injection payloads are rejected by UUID validation."""
+    texts = [{'content': 'hello', 'url': 'http://example.com'}]
+
+    injection_payloads = [
+        "' OR 1=1 --",
+        "'; DROP TABLE pravah_chunks; --",
+        "' UNION SELECT * FROM pravah_chunks WHERE '1'='1",
+        "abc' OR ''='",
+        "1; DELETE FROM pravah_chunks",
+    ]
+
+    for payload in injection_payloads:
+        with pytest.raises(ValueError, match="Invalid UUID format"):
+            RetrievalEngine(texts, uuid_input=payload, use_lancedb=True)
+
+def test_retrieval_engine_rejects_non_string_uuid(mock_dependencies):
+    """Verify that non-string types are rejected by UUID validation."""
+    texts = [{'content': 'hello', 'url': 'http://example.com'}]
+
+    with pytest.raises(ValueError, match="Invalid UUID format"):
+        RetrievalEngine(texts, uuid_input=12345, use_lancedb=True)
+
+    with pytest.raises(ValueError, match="Invalid UUID format"):
+        RetrievalEngine(texts, uuid_input=['not', 'a', 'uuid'], use_lancedb=True)
+
 def test_retrieval_engine_valid_uuid(mock_dependencies):
     texts = [{'content': 'hello', 'url': 'http://example.com'}]
     valid_uuid = str(uuid.uuid4())
 
-    # We need to mock the chunk_texts call too or its return value
     with patch('pravah.retrieval.RetrievalEngine.chunk_texts') as mock_chunks:
         mock_chunks.return_value = []
         engine = RetrievalEngine(texts, uuid_input=valid_uuid, use_lancedb=False)
@@ -72,40 +97,56 @@ def test_retrieval_engine_none_uuid(mock_dependencies):
             # Verify it's a valid UUID
             uuid.UUID(engine.uuid_input)
 
-def test_lancedb_search_quoting(mock_dependencies):
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_uuid_filter_format(mock_dependencies):
+    """Verify _uuid_filter produces correctly quoted filter strings."""
     texts = [{'content': 'hello', 'url': 'http://example.com'}]
     valid_uuid = str(uuid.uuid4())
+
+    with patch('pravah.retrieval.RetrievalEngine.chunk_texts') as mock_chunks:
+        mock_chunks.return_value = []
+        engine = RetrievalEngine(texts, uuid_input=valid_uuid, use_lancedb=False)
+        expected = f"uuid='{valid_uuid}'"
+        assert engine._uuid_filter() == expected
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_lancedb_search_quoting(mock_dependencies):
+    """Verify all LanceDB search methods apply the UUID filter."""
+    texts = [{'content': 'hello', 'url': 'http://example.com'}]
+    valid_uuid = str(uuid.uuid4())
+    expected_filter = f"uuid='{valid_uuid}'"
 
     async def run_test():
         with patch('pravah.retrieval.RetrievalEngine.chunk_texts') as mock_chunks:
             mock_chunks.return_value = []
-            # We need to bypass asyncio.run(self.create_lancedb_table()) in __init__
             with patch('pravah.retrieval.asyncio.run'):
                 engine = RetrievalEngine(texts, uuid_input=valid_uuid, use_lancedb=True)
-                engine.tbl = MagicMock()
+
+                # Build a proper mock chain that tracks calls correctly
+                mock_tbl = MagicMock()
+                engine.tbl = mock_tbl
 
                 # Test lancedb_keyword_search
                 await engine.lancedb_keyword_search("query")
-                engine.tbl.search.assert_called_with("query", query_type='fts')
-                engine.tbl.search().where.assert_called_with(f"uuid='{valid_uuid}'")
+                mock_tbl.search.assert_called_with("query", query_type='fts')
+                mock_tbl.search.return_value.where.assert_called_with(expected_filter)
 
                 # Test lancedb_semantic_search
-                engine.tbl.reset_mock()
+                mock_tbl.reset_mock()
                 await engine.lancedb_semantic_search("query")
-                engine.tbl.search.assert_called_with("query", query_type='vector')
-                engine.tbl.search().where.assert_called_with(f"uuid='{valid_uuid}'")
+                mock_tbl.search.assert_called_with("query", query_type='vector')
+                mock_tbl.search.return_value.where.assert_called_with(expected_filter)
 
                 # Test lancedb_hybrid_search
-                engine.tbl.reset_mock()
+                mock_tbl.reset_mock()
                 await engine.lancedb_hybrid_search("query")
-                engine.tbl.search.assert_called_with("query", query_type='hybrid')
-                engine.tbl.search().where.assert_called_with(f"uuid='{valid_uuid}'")
+                mock_tbl.search.assert_called_with("query", query_type='hybrid')
+                mock_tbl.search.return_value.where.assert_called_with(expected_filter)
 
                 # Test lancedb_combined_search
-                engine.tbl.reset_mock()
+                mock_tbl.reset_mock()
                 await engine.lancedb_combined_search("query")
-                engine.tbl.search.assert_called_with("query", query_type='hybrid')
-                # Check that where was called with the quoted uuid
-                engine.tbl.search().where.assert_called_with(f"uuid='{valid_uuid}'")
+                mock_tbl.search.assert_called_with("query", query_type='hybrid')
+                mock_tbl.search.return_value.where.assert_called_with(expected_filter)
 
     asyncio.run(run_test())

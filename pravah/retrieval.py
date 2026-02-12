@@ -56,6 +56,8 @@ class RetrievalEngine:
         self.use_lancedb = use_lancedb
         self.chunking_method = chunking_method
         if uuid_input is not None:
+            if not isinstance(uuid_input, str):
+                raise ValueError(f"Invalid UUID format: {uuid_input}")
             try:
                 uuid.UUID(uuid_input)
             except (ValueError, TypeError):
@@ -331,23 +333,32 @@ class RetrievalEngine:
         self.tbl.add(self.chunks)
         self.tbl.create_fts_index("content",replace=True)
 
+    def _uuid_filter(self) -> str:
+        """Build a LanceDB .where() filter for session isolation.
+
+        Safe to interpolate because self.uuid_input is validated as a UUID
+        in __init__ (only hex digits and dashes), so it cannot contain
+        SQL metacharacters like quotes or semicolons.
+        """
+        return f"uuid='{self.uuid_input}'"
+
     async def lancedb_keyword_search(self, query: str, top_k: int = 5) -> List[dict]:
-        results = self.tbl.search(query, query_type='fts').where(f"uuid='{self.uuid_input}'").limit(top_k).to_list()
+        results = self.tbl.search(query, query_type='fts').where(self._uuid_filter()).limit(top_k).to_list()
         return results
 
     async def lancedb_semantic_search(self, query: str, top_k: int = 5) -> List[dict]:
-        results = self.tbl.search(query, query_type='vector').where(f"uuid='{self.uuid_input}'").limit(top_k).to_list()
+        results = self.tbl.search(query, query_type='vector').where(self._uuid_filter()).limit(top_k).to_list()
         return results
 
     async def lancedb_hybrid_search(self, query: str, top_k: int = 5) -> List[dict]:
-        results = self.tbl.search(query, query_type='hybrid').where(f"uuid='{self.uuid_input}'").limit(top_k).to_list()
+        results = self.tbl.search(query, query_type='hybrid').where(self._uuid_filter()).limit(top_k).to_list()
         return results
 
     async def lancedb_combined_search(self, query: str, top_k: int = 5) -> List[dict]:
         from lancedb.rerankers import CohereReranker
         reranker = CohereReranker(column='content')
         results = (self.tbl.search(query, query_type='hybrid')
-                   .where(f"uuid='{self.uuid_input}'")
+                   .where(self._uuid_filter())
                    .limit(top_k*2)
                    .rerank(reranker=reranker).limit(top_k))
         return results.to_list()
