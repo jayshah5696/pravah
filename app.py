@@ -219,10 +219,16 @@ def cached_search_query(query, num_results=10):
         raise ValueError("Unsupported search engine")
 
 # Fetch text from URL
-@lru_cache(maxsize=128)
+_fetch_cache = {}
+
 @traceable  # Add tracing to the fetch text function
 async def fetch_text(session, url):
-    return await get_text_from_url(url, search_type=config.search_type, markdown=config.markdown)
+    key = (url, config.search_type, config.markdown)
+    if key in _fetch_cache:
+        return _fetch_cache[key]
+    content = await get_text_from_url(url, search_type=config.search_type, markdown=config.markdown, session=session)
+    _fetch_cache[key] = content
+    return content
 
 # Fetch all texts from URLs
 @traceable  # Add tracing to the fetch all texts function

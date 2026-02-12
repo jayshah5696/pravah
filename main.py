@@ -18,9 +18,14 @@ search_tvly_api_key = os.environ['TVLY_API_KEY']
 def cached_search_query(query):
     return search_query(query)
 
-@lru_cache(maxsize=128)
+_fetch_cache = {}
+
 async def fetch_text(session, url):
-    return await get_text_from_url(url)
+    if url in _fetch_cache:
+        return _fetch_cache[url]
+    content = await get_text_from_url(url, session=session)
+    _fetch_cache[url] = content
+    return content
 
 async def fetch_all_texts(urls):
     async with aiohttp.ClientSession() as session:
