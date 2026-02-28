@@ -79,3 +79,23 @@ def test_generate_chat_title_non_string_fallback():
         title = generate_chat_title("My prompt", "Response")
 
         assert title == "My prompt"[:50]
+
+
+def test_generate_chat_title_strips_xml_title_tags():
+    """XML <title> and </title> tags are stripped from LLM output."""
+    with patch('pravah.llm.completion_llm') as mock_llm:
+        mock_llm.return_value = "Great Chat Title</title>"
+
+        title = generate_chat_title("Hi", "Hello")
+
+        assert title == "Great Chat Title"
+
+
+def test_generate_chat_title_strips_opening_title_tag():
+    """Opening <title> tag is also stripped from LLM output."""
+    with patch('pravah.llm.completion_llm') as mock_llm:
+        mock_llm.return_value = "<title>Great Chat Title</title>"
+
+        title = generate_chat_title("Hi", "Hello")
+
+        assert title == "Great Chat Title"

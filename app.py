@@ -183,7 +183,7 @@ def create_tables(conn):
     # Migration: add title column for existing databases that lack it
     try:
         conn.execute("ALTER TABLE chat_history ADD COLUMN title TEXT")
-    except Exception:
+    except duckdb.CatalogException:
         pass  # Column already exists
     conn.execute("CREATE TABLE IF NOT EXISTS search_results (conversation_uuid UUID, search_result JSON, FOREIGN KEY(conversation_uuid) REFERENCES chat_history(conversation_uuid))")
     conn.execute("CREATE TABLE IF NOT EXISTS fetched_texts (url TEXT PRIMARY KEY, text TEXT)")
@@ -426,7 +426,7 @@ def main():
     # Right-side panel for visualizing and bringing history back
     st.sidebar.header("Visualize and Use History")
     with duckdb.connect(database='pravah.db') as conn:  
-        chat_history = conn.execute("SELECT conversation_uuid, user_input, title FROM chat_history").fetchall()
+        chat_history = conn.execute("SELECT conversation_uuid, user_input, title FROM chat_history ORDER BY rowid DESC").fetchall()
 
     chat_options = {str(chat[0]): (chat[1], chat[2]) for chat in chat_history}
 

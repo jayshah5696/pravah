@@ -374,6 +374,8 @@ def query_rewriter(prompt, previous_prompt=None, messages=None):
     template = env.from_string(template_string)
     rendered_output = template.render(prompt=prompt, previous_prompt=previous_prompt, messages=messages)
     return rendered_output
+
+
 def generate_title_prompt(prompt, response):
     """
     Generates a prompt for creating a short, catchy title for a conversation.

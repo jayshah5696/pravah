@@ -1,5 +1,6 @@
 from litellm import completion
 import os
+import re
 from dotenv import load_dotenv
 from tenacity import retry, stop_after_attempt, wait_fixed
 from pravah.prompts import generate_title_prompt
@@ -41,7 +42,7 @@ def chat_llm_v2_updated(messages, input, model='groq/llama3-70b-8192', system_pr
     messages.append({"content": response.choices[0].message.content, "role": "assistant"})
     return messages
 
-def generate_chat_title(prompt, response, model='groq/llama-3.1-8b-instant', temperature=0.5):
+def generate_chat_title(prompt, response, model='groq/llama-3.1-8b-instant', temperature=0.1):
     """
     Generates a chat title using an LLM.
     Falls back to a truncated prompt on failure.
@@ -57,5 +58,7 @@ def generate_chat_title(prompt, response, model='groq/llama-3.1-8b-instant', tem
 
     if isinstance(title, str):
         title = title.strip().replace('"', '').replace("'", "")
+        # Strip XML tags that the LLM may include (e.g. </title>)
+        title = re.sub(r'</?title>', '', title).strip()
         return title[:100] if title else prompt[:50]
     return prompt[:50]
