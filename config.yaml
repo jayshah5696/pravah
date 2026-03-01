@@ -3,7 +3,7 @@
 
 # Default settings
 defaults:
-  model: "gemini/gemini-2.0-flash"  # Stable model with tool support
+  model: "gemini/gemini-3-flash-preview"  # Latest Gemini 3 Flash (Mar 2026)
   temperature: 0.3
   max_search_results: 5
 
