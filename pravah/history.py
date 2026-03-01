@@ -8,6 +8,7 @@ Provides persistent storage for chat conversations with support for:
 """
 
 import json
+import logging
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -16,6 +17,8 @@ from pathlib import Path
 from typing import Generator
 
 import duckdb
+
+logger = logging.getLogger(__name__)
 
 
 # Default database path
@@ -135,14 +138,14 @@ class HistoryStore:
                 conn.execute(
                     "ALTER TABLE conversations ADD COLUMN is_pinned BOOLEAN DEFAULT FALSE"
                 )
-            except Exception:
-                pass  # Column already exists
+            except duckdb.CatalogException:
+                logger.debug("Column 'is_pinned' already exists, skipping migration")
             try:
                 conn.execute(
                     "ALTER TABLE conversations ADD COLUMN is_archived BOOLEAN DEFAULT FALSE"
                 )
-            except Exception:
-                pass  # Column already exists
+            except duckdb.CatalogException:
+                logger.debug("Column 'is_archived' already exists, skipping migration")
 
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS messages (
@@ -511,18 +514,26 @@ class HistoryStore:
             True if deleted, False if not found.
         """
         with self._connection() as conn:
+            # Check if conversation exists first
+            exists = conn.execute(
+                "SELECT 1 FROM conversations WHERE id = ?",
+                [conversation_id],
+            ).fetchone()
+
+            if not exists:
+                return False
+
             # Delete messages first (foreign key)
             conn.execute(
                 "DELETE FROM messages WHERE conversation_id = ?",
                 [conversation_id],
             )
-
-            result = conn.execute(
+            conn.execute(
                 "DELETE FROM conversations WHERE id = ?",
                 [conversation_id],
             )
 
-            return result.rowcount > 0
+            return True
 
     def update_conversation_model(self, conversation_id: str, model: str) -> None:
         """Update the model used for a conversation.

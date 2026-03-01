@@ -1,22 +1,21 @@
-from tavily import TavilyClient
-from dotenv import load_dotenv
-import os
-import requests
-import random
-import time
-from requests import get
-from bs4 import BeautifulSoup
-import aiohttp
 import asyncio
-import warnings
-from bs4 import MarkupResemblesLocatorWarning
-import pymupdf4llm
 import io
+import logging
+import os
+import random
 import re
+import warnings
 
-# from brave import AsyncBrave
-# from duckduckgo_search import AsyncDDGS
+import aiohttp
+import pymupdf4llm
+from bs4 import BeautifulSoup, MarkupResemblesLocatorWarning
+from tavily import TavilyClient
+
 from tenacity import retry, stop_after_attempt, wait_fixed
+
+from pravah.exceptions import FetchError, SearchError
+
+logger = logging.getLogger(__name__)
 
 warnings.filterwarnings("ignore", category=MarkupResemblesLocatorWarning)
 
@@ -33,11 +32,7 @@ try:
 except ImportError:
     GOOGLE_GENAI_AVAILABLE = False
 
-# load_dotenv()
-# api_key=os.environ['TVLY_API_KEY']
-
-
-def search_query(query: str, api_key, num_results=5):
+def search_query(query: str, api_key: str, num_results: int = 5) -> dict:
     tavily_client = TavilyClient(api_key=api_key)
     results = tavily_client.search(
         query, include_raw_content=False, max_results=num_results
@@ -45,18 +40,7 @@ def search_query(query: str, api_key, num_results=5):
     return results
 
 
-# async def search_query_brave(query, api_key, num_results=5):
-#     brave = AsyncBrave(api_key=api_key)
-#     search_results = await brave.search(q=query, count=num_results)
-#     web_results = search_results.web_results
-#     urls = [x['url'].unicode_string() for x in web_results]
-#     return {'results':[{'url':url} for url in urls]}
-
-# async def search_query_duckduckgo(query, num_results=5):
-#     search_results = await AsyncDDGS().atext(query, max_results=num_results)
-#     return {'results':[{'url': result['href']} for result in search_results]}
-
-# List of user-agents
+# User-agent pool for HTTP requests
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.99 Safari/537.3",
@@ -69,12 +53,6 @@ USER_AGENTS = [
     "Mozilla/5.0 (Linux; Android 8.0.0; SM-G960F Build/R16NW) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.84 Mobile Safari/537.36",
     "Mozilla/5.0 (Windows NT 6.1; WOW64; Trident/7.0; AS; rv:11.0) like Gecko",
 ]
-
-# Proxy details
-PROXIES = {
-    "http": "http://your_proxy_server:port",
-    "https": "https://your_proxy_server:port",
-}
 
 jina_api_key = os.getenv("JINA_API_KEY", "")
 JINA_HEADERS = {
@@ -98,8 +76,7 @@ async def fetch_content(url: str) -> str:
     """
     try:
         headers = {"User-Agent": random.choice(USER_AGENTS)}
-        # Create connector with SSL verification disabled to avoid certificate errors
-        connector = aiohttp.TCPConnector(ssl=False)
+        connector = aiohttp.TCPConnector()
         async with aiohttp.ClientSession(connector=connector) as session:
             if "https://arxiv.org/abs/" in url:
                 url = url.replace("abs", "pdf")
@@ -115,13 +92,13 @@ async def fetch_content(url: str) -> str:
                 else:
                     return await response.text()
     except aiohttp.ClientError as e:
-        print(f"An error occurred while fetching content from {url}: {e}")
+        logger.warning("Failed to fetch content from %s: %s", url, e)
         return ""
     except asyncio.TimeoutError:
-        print(f"Timeout while fetching content from {url}")
+        logger.warning("Timeout while fetching content from %s", url)
         return ""
     except UnicodeDecodeError as e:
-        print(f"An error occurred while decoding content from {url}: {e}")
+        logger.warning("Decoding error for content from %s: %s", url, e)
         return ""
 
 
@@ -142,74 +119,74 @@ def parse_content(content: str, markdown: bool = False) -> str:
             for heading in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
                 try:
                     heading.string = f"{'#' * int(heading.name[1:])} {heading.get_text(strip=True)}\n"
-                except Exception as e:
-                    print(f"Error handling heading: {e}")
+                except (AttributeError, ValueError) as e:
+                    logger.debug("Skipping malformed heading element: %s", e)
 
             # Handle paragraphs
             for p in soup.find_all("p"):
                 try:
                     p.string = f"{p.get_text(strip=True)}\n\n"
-                except Exception as e:
-                    print(f"Error handling paragraph: {e}")
+                except AttributeError as e:
+                    logger.debug("Skipping malformed paragraph element: %s", e)
 
             # Handle links
             for a in soup.find_all("a"):
                 try:
-                    if "href" in a.attrs:  # Check if 'href' exists
+                    if "href" in a.attrs:
                         a.string = f"[{a.get_text(strip=True)}]({a['href']})"
-                except Exception as e:
-                    print(f"Error handling link: {e}")
+                except (AttributeError, KeyError) as e:
+                    logger.debug("Skipping malformed link element: %s", e)
 
             # Handle bold and italic text
             for strong in soup.find_all("strong"):
                 try:
                     strong.string = f"**{strong.get_text(strip=True)}**"
-                except Exception as e:
-                    print(f"Error handling bold text: {e}")
+                except AttributeError as e:
+                    logger.debug("Skipping malformed bold element: %s", e)
             for em in soup.find_all("em"):
                 try:
                     em.string = f"*{em.get_text(strip=True)}*"
-                except Exception as e:
-                    print(f"Error handling italic text: {e}")
+                except AttributeError as e:
+                    logger.debug("Skipping malformed italic element: %s", e)
 
             # Handle unordered lists
             for ul in soup.find_all("ul"):
                 try:
                     for li in ul.find_all("li"):
                         li.string = f"- {li.get_text(strip=True)}\n"
-                except Exception as e:
-                    print(f"Error handling unordered list: {e}")
+                except AttributeError as e:
+                    logger.debug("Skipping malformed unordered list: %s", e)
 
             # Handle ordered lists
             for ol in soup.find_all("ol"):
                 try:
                     for i, li in enumerate(ol.find_all("li")):
                         li.string = f"{i + 1}. {li.get_text(strip=True)}\n"
-                except Exception as e:
-                    print(f"Error handling ordered list: {e}")
+                except AttributeError as e:
+                    logger.debug("Skipping malformed ordered list: %s", e)
 
             # Handle code blocks
             for pre in soup.find_all("pre"):
                 try:
                     pre.string = f"```\n{pre.get_text()}\n```"
-                except Exception as e:
-                    print(f"Error handling code block: {e}")
+                except AttributeError as e:
+                    logger.debug("Skipping malformed code block: %s", e)
 
             # Handle images
             for img in soup.find_all("img"):
                 try:
                     alt_text = img.get("alt", "")
                     img.replace_with(f"![{alt_text}]({img['src']})")
-                except Exception as e:
-                    print(f"Error handling image: {e}")
+                except (AttributeError, KeyError) as e:
+                    logger.debug("Skipping malformed image element: %s", e)
 
             # Remove empty tags
             for tag in soup.find_all():
                 try:
                     if not tag.get_text(strip=True):
                         tag.decompose()
-                except Exception as e:
-                    print(f"Error removing empty tag: {e}")
+                except AttributeError as e:
+                    logger.debug("Error removing empty tag: %s", e)
 
             # Get the final markdown text
             markdown_text = soup.get_text()
@@ -225,11 +202,11 @@ def parse_content(content: str, markdown: bool = False) -> str:
                 text = " ".join([s.get_text(strip=True) for s in soup.find_all()])
                 return text
             except Exception as e:
-                print(f"Error during plain text extraction: {e}")
+                logger.warning("Plain text extraction failed: %s", e)
                 return ""
 
     except Exception as e:
-        print(f"An error occurred during parsing: {e}")
+        logger.warning("HTML parsing failed, trying fallbacks: %s", e)
         for fallback in [
             fallback_to_plain_text,
             fallback_to_partial_markdown,
@@ -237,10 +214,14 @@ def parse_content(content: str, markdown: bool = False) -> str:
         ]:
             try:
                 markdown_text = fallback(content)
-                print(f"Fallback successful using {fallback.__name__}.")
+                logger.debug("Fallback successful using %s", fallback.__name__)
                 return markdown_text
-            except Exception as e:
-                print(f"Error during fallback {fallback.__name__}: {e}")
+            except Exception as fallback_error:
+                logger.debug(
+                    "Fallback %s also failed: %s",
+                    fallback.__name__,
+                    fallback_error,
+                )
         return ""
 
 

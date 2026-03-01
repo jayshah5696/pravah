@@ -4,13 +4,13 @@ pattern_items = r"(?:(?:^|\r?\n)[ \t]{0,3}(?:[-*+•]|\d{1,3}\.|\w\.|\[[ xX]\])[
                 r"(?:(?:\r?\n[ \t]{2,5}(?:[-*+•]|\d{1,3}\.|\w\.|\[[ xX]\])[ \t]+[^\r\n]{1,200}){0,5 }" \
                 r"(?: \r?\n[ \t]{4,7}(?:[-*+•]|\d{1,3}\.|\w\.|\[[ xX]\])[ \t]+[^\r\n]{1,200}){0,5})?)"
 
-patten_blcoks = r"(?:(?:^>(?:>|\s{2,}){0,2}[^\r\n]{0,200}\r?\n?){1,10})"
+pattern_blocks = r"(?:(?:^>(?:>|\s{2,}){0,2}[^\r\n]{0,200}\r?\n?){1,10})"
 pattern_codes = r"(?:(?:^|\r?\n)?(?:```|~~~)(?:\w{0,20})?\r?\n[\s\S]{0,1000}?(?:```|~~~)\r?\n?)" \
                 r"(?:^|\r?\n)(?: {4}|\t)[^\r\n]{0,200}(?:\r?\n(?: {4}|\t)[^\r\n]{0,200}){0,20}\r?\n?" \
                 r"(?:<pre>(?:<code>)?[\s\S]{0,1000}?(?:</code>)?</pre>)"
 pattern_tables = r"(?:(?:^|\r?\n)(?:\|[^\r\n]{0,200}\|(?:\r?\n\|[-:]{1,200}\|){0,1}(?:\r?\\|[^\r\n]{0,200}\|){0,20}<table>[\s\S]{0,2000}?</table>))"
 pattern_rules = r"(?:^(?:[-*_]{3,}\s*$|<hr\s*/?>))"
-patten_sentences = r"(?:[^\r\n]{1,300}(?:[.!?...]|\.{3}|[\u2026\u2047-\u2049]|[😀-🙏🏻])(?:\s+|\r?\n|\Z))"
+pattern_sentences = r"(?:[^\r\n]{1,300}(?:[.!?...]|\.{3}|[\u2026\u2047-\u2049]|[😀-🙏🏻])(?:\s+|\r?\n|\Z))"
 pattern_quoted_text = r"(?:\"\"\"[^\r\n]{0,300}\"\"\"" \
                     r"|['\"`][^\r\n]{0,300}['\"`]" \
                     r"|\([^\r\n()]{0,200}(?:\([^\r\n()]{0,200}\)[^\r\n()]{0,200}){0,5}\)" \
@@ -27,11 +27,11 @@ pattern_all = r"(?:[^\r\n]{1,200})"
 combined_pattern = r"(" \
     + pattern_heading + r"|" \
     + pattern_items + r"|" \
-    + patten_blcoks + r"|" \
+    + pattern_blocks + r"|" \
     + pattern_codes + r"|" \
     + pattern_tables + r"|" \
     + pattern_rules + r"|" \
-    + patten_sentences + r"|" \
+    + pattern_sentences + r"|" \
     + pattern_quoted_text + r"|" \
     + pattern_paragraphs + r"|" \
     + pattern_stand_alone_links + r"|" \

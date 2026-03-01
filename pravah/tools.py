@@ -349,8 +349,21 @@ def read_page_chunk(url: str, chunk_index: int = 0) -> str:
     Returns:
         The content of the specified chunk, with navigation info.
     """
+    from pravah.memory import get_memory_store, get_current_thread_id
+
     try:
-        content = _run_async(get_text_from_url(url, markdown=True))
+        # Try to get content from memory first to avoid re-fetching
+        content = None
+        thread_id = get_current_thread_id()
+        if thread_id:
+            store = get_memory_store()
+            cached = store.get_document(thread_id, url)
+            if cached:
+                content = cached
+
+        # Only fetch if not already in memory
+        if not content:
+            content = _run_async(get_text_from_url(url, markdown=True))
 
         if not content:
             return f"Could not fetch content from {url}."
@@ -453,15 +466,28 @@ def calculate(expression: str) -> str:
     Returns:
         The calculated result
     """
+    import ast
     import math
+    import operator as op
 
-    # Safe evaluation with only math functions
-    allowed_names = {
+    # Map AST node types to safe operations
+    _operators = {
+        ast.Add: op.add,
+        ast.Sub: op.sub,
+        ast.Mult: op.mul,
+        ast.Div: op.truediv,
+        ast.FloorDiv: op.floordiv,
+        ast.Mod: op.mod,
+        ast.Pow: op.pow,
+        ast.USub: op.neg,
+        ast.UAdd: op.pos,
+    }
+
+    _functions = {
         "abs": abs,
         "round": round,
         "min": min,
         "max": max,
-        "sum": sum,
         "pow": pow,
         "sqrt": math.sqrt,
         "sin": math.sin,
@@ -470,16 +496,38 @@ def calculate(expression: str) -> str:
         "log": math.log,
         "log10": math.log10,
         "exp": math.exp,
+    }
+
+    _constants = {
         "pi": math.pi,
         "e": math.e,
     }
 
-    try:
-        # Remove any potentially dangerous characters
-        safe_expr = expression.replace("^", "**")
+    def _safe_eval(node: ast.AST) -> float | int:
+        """Recursively evaluate an AST node using only allowed operations."""
+        if isinstance(node, ast.Expression):
+            return _safe_eval(node.body)
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            return node.value
+        if isinstance(node, ast.Name) and node.id in _constants:
+            return _constants[node.id]
+        if isinstance(node, ast.UnaryOp) and type(node.op) in _operators:
+            return _operators[type(node.op)](_safe_eval(node.operand))
+        if isinstance(node, ast.BinOp) and type(node.op) in _operators:
+            return _operators[type(node.op)](
+                _safe_eval(node.left), _safe_eval(node.right)
+            )
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id in _functions:
+                args = [_safe_eval(arg) for arg in node.args]
+                return _functions[node.func.id](*args)
+            raise ValueError(f"Unknown function: {ast.dump(node.func)}")
+        raise TypeError(f"Unsupported expression: {ast.dump(node)}")
 
-        # Evaluate with restricted namespace
-        result = eval(safe_expr, {"__builtins__": {}}, allowed_names)
+    try:
+        safe_expr = expression.replace("^", "**")
+        tree = ast.parse(safe_expr, mode="eval")
+        result = _safe_eval(tree)
         return f"{expression} = {result}"
-    except Exception as e:
-        return f"Could not calculate '{expression}': {str(e)}"
+    except (ValueError, TypeError, SyntaxError, ZeroDivisionError) as e:
+        return f"Could not calculate '{expression}': {e}"

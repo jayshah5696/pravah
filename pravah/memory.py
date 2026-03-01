@@ -164,6 +164,12 @@ class MemoryStore:
         memory = self.get_memory(thread_id)
         return memory.search(query, top_k)
 
+    def get_document(self, thread_id: str, url: str) -> str | None:
+        """Get a specific document's content by URL, or None if not found."""
+        memory = self.get_memory(thread_id)
+        doc = memory.get_document(url)
+        return doc.content if doc else None
+
     def get_all_urls(self, thread_id: str) -> list[str]:
         """Get all URLs fetched in a thread."""
         memory = self.get_memory(thread_id)

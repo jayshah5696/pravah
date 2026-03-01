@@ -15,27 +15,20 @@ dependencies = [
     "langchain-community>=0.2.0",
     "langchain-core>=0.2.0",
     "langsmith>=0.1.104",
+    "langchain-litellm>=0.3.5",
     # Checkpointing
     "langgraph-checkpoint>=1.0.0",
-    "aiosqlite>=0.19.0",  # Required for async SQLite checkpointing
+    "langgraph-checkpoint-sqlite>=3.0.3",
+    "aiosqlite>=0.19.0",
     # Search & Retrieval
     "tavily-python>=0.3.5",
     "beautifulsoup4>=4.12.3",
-    "duckduckgo-search>=6.2.9",
-    "bm25s>=0.1.10",
-    "rerankers[flashrank]>=0.4.0",
-    "faiss-cpu>=1.8.0.post1",
-    # Vector DB (optional)
-    "lancedb>=0.12.0",
-    "tantivy>=0.22.0",
+    "google-genai>=1.0.0",
     # LLM Providers
     "openai>=1.0.0",
     "anthropic>=0.34.2",
-    "cohere>=5.8.1",
-    "google-genai>=1.0.0",  # Google Gemini with grounded search
     # Document Processing
     "pymupdf4llm>=0.0.14",
-    "tiktoken>=0.7.0",
     # UI & Web
     "streamlit>=1.37.1",
     "aiohttp>=3.10.3",
@@ -47,12 +40,21 @@ dependencies = [
     "pyyaml>=6.0",
     # Storage
     "duckdb>=1.0.0",
-    "fastavro>=1.9.5",
-    "langchain-litellm>=0.3.5",
-    "langgraph-checkpoint-sqlite>=3.0.3",
 ]
 
 [project.optional-dependencies]
+retrieval = [
+    # Legacy retrieval pipeline (main.py)
+    "bm25s>=0.1.10",
+    "rerankers[flashrank]>=0.4.0",
+    "faiss-cpu>=1.8.0.post1",
+    "lancedb>=0.12.0",
+    "tantivy>=0.22.0",
+    "cohere>=5.8.1",
+    "fastavro>=1.9.5",
+    "tiktoken>=0.7.0",
+    "numpy>=1.24.0",
+]
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",

@@ -416,55 +416,6 @@ def render_history_sidebar():
                     st.rerun()
 
 
-def _render_conversation_item(conv: dict, history):
-    """Render a single conversation item in the sidebar (legacy, used outside container)."""
-    conv_id = conv["id"]
-    is_pinned = conv.get("is_pinned", False)
-
-    # Truncate title
-    title = conv["title"]
-    if len(title) > 35:
-        title = title[:35] + "..."
-
-    # Add pin indicator
-    if is_pinned:
-        title = f"* {title}"
-
-    # Main row with conversation button
-    col1, col2 = st.sidebar.columns([5, 1])
-
-    with col1:
-        if st.button(
-            title,
-            key=f"conv_{conv_id}",
-            use_container_width=True,
-            help=f"{conv['message_count']} msgs | {conv['model']}",
-        ):
-            load_conversation(conv_id)
-
-    with col2:
-        # Context menu using popover
-        with st.popover(":", help="Options"):
-            if is_pinned:
-                if st.button("Unpin", key=f"unpin_{conv_id}", use_container_width=True):
-                    history.pin_conversation(conv_id, False)
-                    st.rerun()
-            else:
-                if st.button("Pin", key=f"pin_{conv_id}", use_container_width=True):
-                    history.pin_conversation(conv_id, True)
-                    st.rerun()
-
-            if st.button("Archive", key=f"archive_{conv_id}", use_container_width=True):
-                history.archive_conversation(conv_id, True)
-                st.rerun()
-
-            if st.button(
-                "Delete", key=f"del_{conv_id}", use_container_width=True, type="primary"
-            ):
-                history.delete_conversation(conv_id)
-                st.rerun()
-
-
 def _render_conversation_item_in_container(conv: dict, history):
     """Render a single conversation item inside a container (uses st. not st.sidebar)."""
     conv_id = conv["id"]

@@ -1,55 +1,67 @@
-import os
+"""Retrieval engine for search result chunking, embedding, and ranking."""
+
 import asyncio
-import numpy as np
-from bm25s import BM25  # Updated import
+import os
+import re
+
 import bm25s
-from typing import List
 import faiss
 import fastavro
-from dotenv import load_dotenv
-import tiktoken
-import re
 import litellm
+import numpy as np
+import tiktoken
+from bm25s import BM25
+from dotenv import load_dotenv
+from langsmith import traceable
 from rerankers import Reranker
-from functools import lru_cache 
-from cachetools import LRUCache, cached  
-from cachetools.keys import hashkey  
-from .regax_pattern import combined_pattern
-from functools import lru_cache
-import lancedb
-from lancedb.pydantic import LanceModel, Vector
-from lancedb.embeddings import OpenAIEmbeddings
-import uuid
-from langsmith import traceable, Client
+
+from .regex_patterns import combined_pattern
+
 load_dotenv()
 
 class LiteLLMEmbeddingClient:
+    """Client for generating embeddings via LiteLLM."""
+
     def __init__(self, model: str, api_key: str):
         self.model = model
         self.api_key = api_key
-    async def embed_document(self, text: str) -> List[float]:
-        response = litellm.embedding(input=[text], model=self.model, api_key=self.api_key)
-        return response['data'][0]['embedding']
 
-    async def embed_documents(self, texts: List[str]) -> List[List[float]]:
+    async def embed_document(self, text: str) -> list[float]:
+        response = litellm.embedding(
+            input=[text], model=self.model, api_key=self.api_key
+        )
+        return response["data"][0]["embedding"]
+
+    async def embed_documents(self, texts: list[str]) -> list[list[float]]:
         tasks = [self.embed_document(text) for text in texts]
         return await asyncio.gather(*tasks)
 
-    async def embed_query(self, query: str) -> List[float]:
+    async def embed_query(self, query: str) -> list[float]:
         return await self.embed_document(query)
 
 @traceable
 class RetrievalEngine:
-    def __init__(self, texts: List[dict],
-                uuid_input: str,
-                chunk_size: int = 500,
-                overlap: int = 100,
-                chunking_method: str = 'tokens',
-                tokens: bool = False,
-                use_lancedb: bool = False,
-                embed_client = LiteLLMEmbeddingClient(model= "text-embedding-3-small",
-                                                    api_key=os.environ['OPENAI_API_KEY']),
-                reranker = Reranker('flashrank')):
+    """Engine for chunking, indexing, and searching text documents."""
+
+    def __init__(
+        self,
+        texts: list[dict],
+        uuid_input: str,
+        chunk_size: int = 500,
+        overlap: int = 100,
+        chunking_method: str = "tokens",
+        tokens: bool = False,
+        use_lancedb: bool = False,
+        embed_client: LiteLLMEmbeddingClient | None = None,
+        reranker: Reranker | None = None,
+    ):
+        if embed_client is None:
+            embed_client = LiteLLMEmbeddingClient(
+                model="text-embedding-3-small",
+                api_key=os.environ["OPENAI_API_KEY"],
+            )
+        if reranker is None:
+            reranker = Reranker("flashrank")
         self.chunk_size = chunk_size
         self.overlap = overlap
         self.tokens = tokens
@@ -143,26 +155,22 @@ class RetrievalEngine:
         bm25.index(tokenized_chunks)
         return bm25
 
-    @lru_cache(maxsize=128)
     async def create_embeddings(self):
         if self.embeddings is None:
             texts = [chunk['content'] for chunk in self.chunks]
             self.embeddings = await self.embed_client.embed_documents(texts)
         return self.embeddings
     
-    @lru_cache(maxsize=128)
-    async def semantic_query_run(self, query: str, top_k: int = 5) -> List[dict]:
+    async def semantic_query_run(self, query: str, top_k: int = 5) -> list[dict]:
         query_embedding = await self.embed_client.embed_documents([query])
         index = await self.create_faiss_index()  # Ensure this is awaited
         distances, indices = index.search(np.array(query_embedding).astype('float32'), top_k)
         return distances, indices
     
-    @lru_cache(maxsize=128)
-    async def semantic_search(self, query: str, top_k: int = 5) -> List[dict]:
+    async def semantic_search(self, query: str, top_k: int = 5) -> list[dict]:
         distance, indices = await self.semantic_query_run(query, top_k)
         return [self.chunks[i] for i in indices[0]]
 
-    @lru_cache(maxsize=128)
     async def create_faiss_index(self):
         if self.index is None:
             embeddings = await self.create_embeddings()
@@ -172,8 +180,7 @@ class RetrievalEngine:
             self.index.add(embeddings)
         return self.index
 
-    @lru_cache(maxsize=128)
-    async def keyword_search(self, query: str, top_k: int = 5) -> List[dict]:
+    async def keyword_search(self, query: str, top_k: int = 5) -> list[dict]:
         if self.use_lancedb:
             return await self.lancedb_keyword_search(query, top_k)
         else:
@@ -183,8 +190,7 @@ class RetrievalEngine:
             return [self.chunks[doc_id] for doc_id in docs[0]]
 
 
-    @lru_cache(maxsize=128)
-    async def combined_search(self, query: str, top_k: int = 5, alpha: float = 0.5) -> List[dict]:
+    async def combined_search(self, query: str, top_k: int = 5, alpha: float = 0.5) -> list[dict]:
         if self.use_lancedb:
             return await self.lancedb_combined_search(query, top_k)
         else:

@@ -10,6 +10,7 @@ Features:
 """
 
 from typing import TypedDict, Annotated, Literal
+import logging
 import operator
 import os
 import sqlite3
@@ -27,8 +28,10 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.memory import MemorySaver
 
-# Try to import AsyncSqliteSaver for persistent storage with async support
-# Falls back to MemorySaver if not available
+logger = logging.getLogger(__name__)
+
+# Try to import AsyncSqliteSaver for persistent storage with async support.
+# Falls back to MemorySaver if not available.
 _USE_SQLITE_ASYNC = False
 AsyncSqliteSaver = None
 
@@ -38,7 +41,7 @@ try:
     AsyncSqliteSaver = _AsyncSqliteSaver
     _USE_SQLITE_ASYNC = True
 except ImportError:
-    pass
+    logger.debug("langgraph.checkpoint.sqlite.aio not available, trying fallback")
 
 if AsyncSqliteSaver is None:
     try:
@@ -49,13 +52,16 @@ if AsyncSqliteSaver is None:
         AsyncSqliteSaver = _AsyncSqliteSaver
         _USE_SQLITE_ASYNC = True
     except ImportError:
-        pass
+        logger.info(
+            "AsyncSqliteSaver not available from any source; "
+            "falling back to MemorySaver for persistence"
+        )
 
 # Import RemainingSteps if available (newer langgraph versions)
 try:
     from langgraph.managed import RemainingSteps
 except ImportError:
-    # Fallback: create a simple int type alias
+    logger.debug("langgraph.managed.RemainingSteps not available, using int fallback")
     RemainingSteps = int  # type: ignore
 
 from pravah.tools import (
