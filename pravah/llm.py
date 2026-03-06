@@ -9,13 +9,6 @@ litellm.vertex_project='sparkcognition-apm-dev'
 litellm.vertex_location='us-east5'
 
 
-# Safely get the API key
-# api_key = os.getenv('GROQ_API_KEY')
-# if not api_key:
-#     raise ValueError("GROQ_API_KEY not found in environment variables")
-
-# print(api_key)
-
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
 def completion_llm(text, model='groq/llama3-70b-8192', temperature=0.7, stream=False):
