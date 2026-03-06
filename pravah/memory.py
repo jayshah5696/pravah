@@ -57,6 +57,11 @@ class SessionMemory:
         if not query_terms:
             return []
 
+        # Pre-compile the pattern for snippet extraction
+        snippet_pattern = re.compile(
+            "|".join(re.escape(term) for term in query_terms), re.IGNORECASE
+        )
+
         # Score each document
         scored_docs = []
         for url, doc in self.documents.items():
@@ -73,7 +78,9 @@ class SessionMemory:
 
             if score > 0:
                 # Extract a relevant snippet
-                snippet = self._extract_snippet(doc.content, list(query_terms))
+                snippet = self._extract_snippet(
+                    doc.content, list(query_terms), pattern=snippet_pattern
+                )
                 scored_docs.append(
                     {
                         "url": url,
@@ -90,21 +97,28 @@ class SessionMemory:
         return scored_docs[:top_k]
 
     def _extract_snippet(
-        self, content: str, terms: list[str], context_chars: int = 200
+        self,
+        content: str,
+        terms: list[str],
+        context_chars: int = 200,
+        pattern: Optional[re.Pattern] = None,
     ) -> str:
         """Extract a snippet around the first matching term."""
-        content_lower = content.lower()
+        if not terms:
+            return content[: context_chars * 2] + "..."
 
-        # Find the first occurrence of any term
-        best_pos = len(content)
-        for term in terms:
-            pos = content_lower.find(term)
-            if pos != -1 and pos < best_pos:
-                best_pos = pos
+        # Use a compiled regex to find the first occurrence of any term in a single pass
+        if pattern is None:
+            pattern = re.compile(
+                "|".join(re.escape(term) for term in terms), re.IGNORECASE
+            )
+        match = pattern.search(content)
 
-        if best_pos == len(content):
+        if not match:
             # No match found, return start of content
             return content[: context_chars * 2] + "..."
+
+        best_pos = match.start()
 
         # Extract context around the match
         start = max(0, best_pos - context_chars)
