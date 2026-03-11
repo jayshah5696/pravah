@@ -11,9 +11,7 @@ Features:
 
 import os
 import asyncio
-from typing import Optional
 from langchain_core.tools import tool
-from langchain_core.runnables import RunnableConfig
 
 from pravah.search import search_query, search_query_gemini, get_text_from_url
 from pravah.llm import completion_llm
