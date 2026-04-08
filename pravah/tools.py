@@ -453,7 +453,22 @@ def calculate(expression: str) -> str:
     Returns:
         The calculated result
     """
+    import ast
     import math
+    import operator
+
+    # Supported operators
+    operators = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+        ast.FloorDiv: operator.floordiv,
+        ast.Mod: operator.mod,
+        ast.Pow: operator.pow,
+        ast.UAdd: operator.pos,
+        ast.USub: operator.neg,
+    }
 
     # Safe evaluation with only math functions
     allowed_names = {
@@ -474,12 +489,35 @@ def calculate(expression: str) -> str:
         "e": math.e,
     }
 
-    try:
-        # Remove any potentially dangerous characters
-        safe_expr = expression.replace("^", "**")
+    def _eval(node):
+        if isinstance(node, ast.Constant):
+            return node.value
+        elif isinstance(node, ast.BinOp):
+            return operators[type(node.op)](_eval(node.left), _eval(node.right))
+        elif isinstance(node, ast.UnaryOp):
+            return operators[type(node.op)](_eval(node.operand))
+        elif isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name):
+                func_name = node.func.id
+                if func_name in allowed_names:
+                    args = [_eval(arg) for arg in node.args]
+                    return allowed_names[func_name](*args)
+                raise ValueError(f"Function {func_name} is not allowed")
+            raise ValueError("Direct function calls only allowed")
+        elif isinstance(node, ast.Name):
+            if node.id in allowed_names:
+                return allowed_names[node.id]
+            raise ValueError(f"Name {node.id} is not allowed")
+        elif isinstance(node, ast.Expression):
+            return _eval(node.body)
+        else:
+            raise TypeError(f"Unsupported AST node type: {type(node)}")
 
-        # Evaluate with restricted namespace
-        result = eval(safe_expr, {"__builtins__": {}}, allowed_names)
+    try:
+        # Support ^ for power as well
+        safe_expr = expression.replace("^", "**")
+        tree = ast.parse(safe_expr, mode="eval")
+        result = _eval(tree.body)
         return f"{expression} = {result}"
     except Exception as e:
         return f"Could not calculate '{expression}': {str(e)}"
