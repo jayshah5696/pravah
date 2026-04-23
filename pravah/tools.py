@@ -454,6 +454,8 @@ def calculate(expression: str) -> str:
         The calculated result
     """
     import math
+    import ast
+    import operator
 
     # Safe evaluation with only math functions
     allowed_names = {
@@ -474,12 +476,43 @@ def calculate(expression: str) -> str:
         "e": math.e,
     }
 
+    operators = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+        ast.FloorDiv: operator.floordiv,
+        ast.Mod: operator.mod,
+        ast.Pow: operator.pow,
+        ast.USub: operator.neg,
+        ast.UAdd: operator.pos,
+    }
+
+    def _eval(node):
+        if isinstance(node, ast.Constant):
+            return node.value
+        elif isinstance(node, ast.BinOp):
+            return operators[type(node.op)](_eval(node.left), _eval(node.right))
+        elif isinstance(node, ast.UnaryOp):
+            return operators[type(node.op)](_eval(node.operand))
+        elif isinstance(node, ast.Call):
+            func = _eval(node.func)
+            return func(*[_eval(arg) for arg in node.args])
+        elif isinstance(node, ast.Name):
+            if node.id in allowed_names:
+                return allowed_names[node.id]
+            raise ValueError(f"Name '{node.id}' is not allowed")
+        raise TypeError(f"Unsupported operation: {type(node).__name__}")
+
     try:
         # Remove any potentially dangerous characters
         safe_expr = expression.replace("^", "**")
 
-        # Evaluate with restricted namespace
-        result = eval(safe_expr, {"__builtins__": {}}, allowed_names)
+        # Parse the expression
+        tree = ast.parse(safe_expr, mode="eval")
+
+        # Evaluate safely
+        result = _eval(tree.body)
         return f"{expression} = {result}"
     except Exception as e:
         return f"Could not calculate '{expression}': {str(e)}"
