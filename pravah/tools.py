@@ -454,6 +454,8 @@ def calculate(expression: str) -> str:
         The calculated result
     """
     import math
+    import ast
+    import operator
 
     # Safe evaluation with only math functions
     allowed_names = {
@@ -474,12 +476,49 @@ def calculate(expression: str) -> str:
         "e": math.e,
     }
 
-    try:
-        # Remove any potentially dangerous characters
-        safe_expr = expression.replace("^", "**")
+    # Map AST operators to operator functions
+    operators = {
+        ast.Add: operator.add,
+        ast.Sub: operator.sub,
+        ast.Mult: operator.mul,
+        ast.Div: operator.truediv,
+        ast.Pow: operator.pow,
+        ast.BitXor: operator.pow,  # Support ^ as power
+        ast.USub: operator.neg,
+        ast.UAdd: operator.pos,
+    }
 
-        # Evaluate with restricted namespace
-        result = eval(safe_expr, {"__builtins__": {}}, allowed_names)
+    def _eval_node(node):
+        if isinstance(node, ast.Expression):
+            return _eval_node(node.body)
+        elif isinstance(node, ast.Num):  # For Python < 3.8
+            return node.n
+        elif isinstance(node, ast.Constant):  # For Python >= 3.8
+            return node.value
+        elif isinstance(node, ast.BinOp):
+            left = _eval_node(node.left)
+            right = _eval_node(node.right)
+            return operators[type(node.op)](left, right)
+        elif isinstance(node, ast.UnaryOp):
+            operand = _eval_node(node.operand)
+            return operators[type(node.op)](operand)
+        elif isinstance(node, ast.Call):
+            func = _eval_node(node.func)
+            args = [_eval_node(arg) for arg in node.args]
+            return func(*args)
+        elif isinstance(node, ast.Name):
+            if node.id in allowed_names:
+                return allowed_names[node.id]
+            raise ValueError(f"Name '{node.id}' is not allowed")
+        else:
+            raise TypeError(f"Unsupported AST node type: {type(node).__name__}")
+
+    try:
+        # Parse the expression into an AST
+        tree = ast.parse(expression, mode="eval")
+
+        # Evaluate the AST
+        result = _eval_node(tree)
         return f"{expression} = {result}"
     except Exception as e:
         return f"Could not calculate '{expression}': {str(e)}"
