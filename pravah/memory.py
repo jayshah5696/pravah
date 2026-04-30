@@ -17,6 +17,9 @@ from threading import Lock
 from typing import Optional
 import re
 
+# Pre-compiled regex pattern for tokenization
+WORD_PATTERN = re.compile(r"\w+")
+
 
 @dataclass
 class Document:
@@ -53,7 +56,7 @@ class SessionMemory:
         self.last_accessed = datetime.now()
 
         # Tokenize query
-        query_terms = set(re.findall(r"\w+", query.lower()))
+        query_terms = set(WORD_PATTERN.findall(query.lower()))
         if not query_terms:
             return []
 
