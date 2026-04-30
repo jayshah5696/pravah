@@ -522,3 +522,106 @@ def calculate(expression: str) -> str:
         return f"{expression} = {result}"
     except Exception as e:
         return f"Could not calculate '{expression}': {str(e)}"
+
+
+# ============================================================================
+# File Upload Search Tools
+# ============================================================================
+
+
+@tool
+def search_uploads(query: str, top_k: int = 5, offset: int = 0) -> str:
+    """Search content in files uploaded by the user in this session.
+
+    Use this tool when the user:
+    - Asks about content in their uploaded documents
+    - References "my document", "the file I uploaded", etc.
+    - Wants to find specific information in uploaded PDFs, DOCXs, etc.
+
+    This returns PREVIEWS of matching content. Use read_upload_chunk
+    with the chunk_id to get full content of specific sections.
+
+    Args:
+        query: What to search for in uploaded documents
+        top_k: Number of results to return (default 5)
+        offset: Skip this many results (for pagination through many results)
+
+    Returns:
+        Matching content previews with chunk_ids for drilling down.
+        Use read_upload_chunk(chunk_id) to read full content.
+    """
+    from pravah.uploads import get_upload_manager
+    from pravah.memory import get_current_thread_id
+
+    thread_id = get_current_thread_id()
+    if not thread_id:
+        return "Upload search is not available: no active session context."
+
+    manager = get_upload_manager()
+    results = manager.search(query, conversation_id=thread_id, top_k=top_k, offset=offset)
+
+    if not results:
+        # Check if any uploads exist
+        uploads = manager.list_uploads(thread_id)
+        if not uploads:
+            return f"No documents have been uploaded in this session. The user needs to upload files first using the file upload button."
+        else:
+            files = ", ".join(u["filename"] for u in uploads)
+            return f"No matches found for '{query}' in uploaded files ({files}). Try different search terms."
+
+    # Format results
+    output_parts = [f"**Found {len(results)} match(es) for '{query}':**\n"]
+
+    for i, r in enumerate(results, 1):
+        output_parts.append(f"""**[{i}] {r["filename"]}** (chunk {r["chunk_index"] + 1}/{r["total_chunks"]})
+chunk_id: `{r["chunk_id"]}`
+Preview: {r["preview"]}
+""")
+
+    if len(results) == top_k:
+        output_parts.append(f"---\n*More results may exist. Use offset={offset + top_k} to see next page.*")
+
+    output_parts.append("*Use read_upload_chunk(chunk_id) to read full content of any chunk.*")
+
+    return "\n".join(output_parts)
+
+
+@tool
+def read_upload_chunk(chunk_id: str) -> str:
+    """Read the full content of a specific chunk from an uploaded document.
+
+    Use this after search_uploads to get complete text of a matched section.
+    Also provides navigation to previous/next chunks for scrolling through
+    long documents.
+
+    Args:
+        chunk_id: The chunk ID from search_uploads results
+
+    Returns:
+        Full chunk text with navigation info (prev/next chunk_ids).
+    """
+    from pravah.uploads import get_upload_manager
+
+    manager = get_upload_manager()
+    result = manager.read_chunk(chunk_id)
+
+    if "error" in result:
+        return f"Could not read chunk: {result['error']}"
+
+    # Format output with navigation
+    nav_parts = []
+    if result.get("prev_chunk_id"):
+        nav_parts.append(f"Previous: `{result['prev_chunk_id']}`")
+    if result.get("next_chunk_id"):
+        nav_parts.append(f"Next: `{result['next_chunk_id']}`")
+
+    nav_str = " | ".join(nav_parts) if nav_parts else "This is the only chunk."
+
+    return f"""**{result["filename"]}** - Chunk {result["chunk_index"] + 1} of {result["total_chunks"]}
+
+{result["content"]}
+
+---
+*Navigation: {nav_str}*
+"""
+

@@ -116,3 +116,5 @@ Answer
 
 ---
 Created: January 2026
+
+> **See also:** [tasks.md](../tasks.md) for strategic tracks (agent orchestration, MCP, multi-modal, voice mode).

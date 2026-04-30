@@ -1,7 +1,9 @@
 import unittest
+from unittest.mock import patch
 from pravah.pricing import get_model_pricing, calculate_cost, format_cost, get_model_cost_tier, ModelPricing
 
 class TestPricing(unittest.TestCase):
+    @patch("litellm.model_cost", {})
     def test_get_model_pricing(self):
         # Exact match
         pricing = get_model_pricing("openai/gpt-4o")
@@ -19,6 +21,7 @@ class TestPricing(unittest.TestCase):
         pricing = get_model_pricing("nonexistent/model")
         self.assertIsNone(pricing)
 
+    @patch("litellm.model_cost", {})
     def test_calculate_cost(self):
         # Known model
         cost = calculate_cost("openai/gpt-4o", 1000000, 1000000)
@@ -35,6 +38,7 @@ class TestPricing(unittest.TestCase):
         self.assertEqual(format_cost(0.5), "$0.500")
         self.assertEqual(format_cost(5.0), "$5.00")
 
+    @patch("litellm.model_cost", {})
     def test_get_model_cost_tier(self):
         # Free (< 0.10)
         self.assertEqual(get_model_cost_tier("groq/llama-3.1-8b-instant"), "Free") # output 0.08

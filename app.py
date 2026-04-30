@@ -597,6 +597,66 @@ def render_sidebar() -> Config:
     # API Key management
     render_api_key_setup()
 
+    # File Upload section
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📁 Upload Documents")
+
+    # Initialize processed files tracker in session state
+    if "processed_files" not in st.session_state:
+        st.session_state.processed_files = set()
+
+    uploaded_files = st.sidebar.file_uploader(
+        "Upload files to search",
+        type=["pdf", "docx", "pptx", "xlsx", "txt", "md", "csv", "html", "json"],
+        accept_multiple_files=True,
+        key=f"file_uploader_{st.session_state.thread_id}",
+        help="Upload documents to search within this conversation. Supports PDF, DOCX, PPTX, and more.",
+    )
+
+    if uploaded_files:
+        from pravah.uploads import get_upload_manager
+        import tempfile
+        from pathlib import Path
+
+        manager = get_upload_manager()
+        new_uploads = 0
+
+        for uploaded_file in uploaded_files:
+            # Create unique key for this file+conversation
+            file_key = f"{st.session_state.thread_id}:{uploaded_file.name}:{uploaded_file.size}"
+
+            # Skip if already processed
+            if file_key in st.session_state.processed_files:
+                continue
+
+            # Save to temp file and process
+            with tempfile.NamedTemporaryFile(delete=False, suffix=Path(uploaded_file.name).suffix) as tmp:
+                tmp.write(uploaded_file.getvalue())
+                tmp.flush()
+
+                result = manager.process_file(
+                    file_path=Path(tmp.name),
+                    filename=uploaded_file.name,
+                    conversation_id=st.session_state.thread_id,
+                )
+
+                if result["success"]:
+                    st.session_state.processed_files.add(file_key)
+                    new_uploads += 1
+
+        if new_uploads > 0:
+            st.sidebar.success(f"✓ Indexed {new_uploads} file(s)")
+
+    # Show uploaded files for this conversation
+    if "thread_id" in st.session_state:
+        from pravah.uploads import get_upload_manager
+        manager = get_upload_manager()
+        uploads = manager.list_uploads(st.session_state.thread_id)
+        if uploads:
+            with st.sidebar.expander(f"📄 Indexed Files ({len(uploads)})", expanded=False):
+                for u in uploads:
+                    st.caption(f"• {u['filename']} ({u['chunk_count']} chunks)")
+
     # Session management
     st.sidebar.markdown("---")
     st.sidebar.subheader("Conversations")
@@ -1014,8 +1074,14 @@ def main():
 
     # Welcome message if no messages
     if not st.session_state.messages:
-        st.markdown("""
-        ### Welcome to Pravah
+        from pravah.welcome import generate_welcome_with_fallback, get_api_status
+
+        # Generate dynamic welcome
+        welcome = generate_welcome_with_fallback()
+        api_status = get_api_status(["TVLY_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY"])
+
+        st.markdown(f"""
+        ### {welcome.greeting}
         
         An AI search engine that finds and synthesizes information from the web.
         
@@ -1024,6 +1090,8 @@ def main():
         - Read and summarize articles
         - Perform calculations
         - Cite all sources
+        
+        **💡 Tip:** {welcome.tip}
         
         **Try asking:**
         - "What are the new features in Python 3.13?"

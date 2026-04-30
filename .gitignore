@@ -7,3 +7,5 @@
 *.csv
 .DS_Store
 *my_db/
+.uploads_db/
+uv-cache/

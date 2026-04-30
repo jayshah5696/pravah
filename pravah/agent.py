@@ -65,6 +65,8 @@ from pravah.tools import (
     search_memory,
     read_page_chunk,
     calculate,
+    search_uploads,
+    read_upload_chunk,
 )
 from pravah.prompts import get_agent_system_prompt
 from pravah.memory import set_current_thread_id
@@ -106,6 +108,8 @@ tools = [
     read_page_chunk,
     search_memory,
     calculate,
+    search_uploads,
+    read_upload_chunk,
 ]
 
 

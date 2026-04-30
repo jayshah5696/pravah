@@ -1,31 +1,35 @@
 # Pravah v2
 
-Pravah is a search-first chat app that combines web results and agent tools. The name means "flow" in Sanskrit.
+Pravah is a search-first chat app that combines web search, agent tools, local document search, and persistent chat history. The name means "flow" in Sanskrit.
 
-![Pravah Demo](assets/demo.gif)
+![Pravah App](assets/app_screenshot.png)
 
-## What it does
+## Highlights
 
-- Web search with source-backed answers
-- Page fetching and long-document chunking
+- Search-first chat UI built with Streamlit
+- Tavily web search and Gemini grounded search
+- Page fetching, chunking, and memory search
+- Local file uploads for `.txt`, `.md`, `.csv`, `.pdf`, `.docx`, `.pptx`, `.xlsx`
+- Smart chat titles
+- Dynamic welcome panel with API-key status
+- Persistent conversation history in DuckDB
 - Multi-provider LLM support via LiteLLM
-- Persistent chat history in DuckDB
-- Streaming responses and tool visibility
+- Evaluation runner and saved traces
+- Safe `calculate` tool and hardened retrieval filters
 
 ## Quick start
 
 ### Prerequisites
 
 - Python 3.11+
-- uv (recommended) or pip
+- `uv`
 
 ### Install
 
 ```bash
 git clone https://github.com/jayshah5696/pravah.git
 cd pravah
-
-uv sync
+uv sync --group dev
 ```
 
 ### Configure
@@ -37,71 +41,100 @@ TVLY_API_KEY=your_tavily_api_key
 
 OPENAI_API_KEY=your_openai_api_key
 ANTHROPIC_API_KEY=your_anthropic_api_key
-GEMINI_API_KEY=your_gemini_api_key
+GOOGLE_API_KEY=your_google_api_key
+# or GEMINI_API_KEY=your_gemini_api_key
 GROQ_API_KEY=your_groq_api_key
 DEEPSEEK_API_KEY=your_deepseek_api_key
+COHERE_API_KEY=your_cohere_api_key
 
 LANGCHAIN_API_KEY=your_langsmith_api_key
 LANGCHAIN_PROJECT=pravah
 ```
 
-If you want to customize the model list or UI, edit `config.yaml`.
+If you want to customize model choices or UI defaults, edit `config.yaml`.
 
-### Run
+### Run the app
 
 ```bash
 uv run streamlit run app.py
 ```
 
-Open http://localhost:8501
+Open `http://localhost:8501`.
 
-## Project structure
+## Testing
 
-```
-pravah/
-├── app.py                 # Streamlit UI
-├── config.yaml            # Model and UI configuration
-├── pravah/
-│   ├── agent.py           # LangGraph agent
-│   ├── tools.py           # Tool layer (search, fetch, calculate)
-│   ├── prompts.py         # System prompt builder
-│   ├── history.py         # DuckDB history storage
-│   ├── search.py          # Search providers
-│   ├── retrieval.py       # Chunking and reranking
-│   └── llm.py             # LLM helpers
-├── scripts/
-│   └── eval.py            # Evaluation runner
-├── tests/
-│   └── eval_set.csv       # Eval dataset
-├── .streamlit/
-│   └── config.toml        # Theme
-└── docs/
-    └── EVAL_GUIDE.md      # Evaluation notes
+Run the full repo test suite:
+
+```bash
+uv run pytest tests -q
 ```
 
-## Models and providers
-
-The UI reads available models from `config.yaml`. Keep that file as the source of truth for the UI list. If you use a custom model string, enter it in the sidebar.
-
-## Agent tools
-
-| Tool | Purpose |
-|------|---------|
-| `web_search` | Web search via Tavily |
-| `fetch_page` | Fetch and extract page text |
-| `read_page_chunk` | Navigate long pages |
-| `search_memory` | Search previously fetched content |
-| `calculate` | Safe math evaluation |
+Current status in this branch: **49 tests passing**.
 
 ## Evaluation
 
 ```bash
 uv run python scripts/eval.py
 uv run python scripts/eval.py --limit 10
-uv run python scripts/eval.py --verbose
+uv run python scripts/eval.py --model "gemini/gemini-2.0-flash"
 ```
 
-Results are written to `tests/eval_results.csv` and `tests/traces/`.
+Outputs are written to:
+- `tests/eval_results.csv`
+- `tests/traces/`
+
+## Project structure
+
+```text
+.
+├── app.py
+├── config.yaml
+├── docs/
+├── pravah/
+│   ├── agent.py
+│   ├── history.py
+│   ├── llm.py
+│   ├── memory.py
+│   ├── pricing.py
+│   ├── prompts.py
+│   ├── retrieval.py
+│   ├── search.py
+│   ├── titles.py
+│   ├── tools.py
+│   ├── uploads.py
+│   └── welcome.py
+├── scripts/
+├── tests/
+└── assets/
+```
+
+## Main tools
+
+| Tool | Purpose |
+|---|---|
+| `web_search` | Search the web via Tavily |
+| `gemini_search` | Grounded Gemini search |
+| `fetch_page` | Read and summarize a page |
+| `read_page_chunk` | Navigate long pages |
+| `search_memory` | Search fetched page content |
+| `search_uploads` | Search uploaded documents |
+| `read_upload_chunk` | Read a full uploaded chunk |
+| `calculate` | Safe math evaluation |
+
+## Notes on uploads
+
+- Simple text formats (`.txt`, `.md`, `.csv`, `.json`, `.html`) are parsed with lightweight built-in logic.
+- Richer document types fall back to `markitdown`.
+- Upload search is conversation-scoped and supports pagination.
+
+## Development
+
+```bash
+uv sync --group dev
+uv run pytest tests -q
+uv run ruff check .
+uv run ruff format .
+```
 
 ## Docker
 
@@ -109,19 +142,6 @@ Results are written to `tests/eval_results.csv` and `tests/traces/`.
 docker build -t pravah .
 docker run -p 8501:8501 --env-file .env pravah
 ```
-
-## Development
-
-```bash
-uv sync --group dev
-uv run pytest
-uv run ruff check .
-uv run ruff format .
-```
-
-## Contributing
-
-Open an issue or PR with a focused change and a short description of how you tested it.
 
 ## License
 
