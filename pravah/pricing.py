@@ -83,13 +83,28 @@ MODEL_PRICING: dict[str, ModelPricing] = {
 def get_model_pricing(model: str) -> Optional[ModelPricing]:
     """Get pricing for a model.
 
+    Checks litellm.model_cost first (source of truth), falls back to
+    manual MODEL_PRICING dict for models not in litellm.
+
     Args:
         model: The model string (e.g., "openai/gpt-4o", "anthropic/claude-3.5-sonnet")
 
     Returns:
         ModelPricing if found, None otherwise.
     """
-    # Direct match
+    # Try litellm.model_cost first (source of truth)
+    try:
+        import litellm
+
+        litellm_data = litellm.model_cost.get(model)
+        if litellm_data:
+            input_cost = litellm_data.get("input_cost_per_token", 0) * 1_000_000
+            output_cost = litellm_data.get("output_cost_per_token", 0) * 1_000_000
+            return ModelPricing(input_cost, output_cost)
+    except Exception:
+        pass  # Fall through to manual dict
+
+    # Fallback: Direct match in manual dict
     if model in MODEL_PRICING:
         return MODEL_PRICING[model]
 

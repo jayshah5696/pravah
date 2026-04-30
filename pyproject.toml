@@ -50,6 +50,9 @@ dependencies = [
     "fastavro>=1.9.5",
     "langchain-litellm>=0.3.5",
     "langgraph-checkpoint-sqlite>=3.0.3",
+    # New: File uploads & structured output
+    "markitdown[all]>=0.1.0",  # Microsoft file-to-markdown converter
+    "instructor>=1.0.0",  # Pydantic structured LLM output
 ]
 
 [project.optional-dependencies]
@@ -65,3 +68,13 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pravah"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [
+    ".git",
+    ".venv",
+    "uv-cache",
+    ".uploads_db",
+    "remotion-demo",
+]
