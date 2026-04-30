@@ -18,6 +18,9 @@ from typing import Optional
 import re
 
 
+WORD_PATTERN = re.compile(r"\w+")
+
+
 @dataclass
 class Document:
     """A fetched document."""
@@ -53,7 +56,7 @@ class SessionMemory:
         self.last_accessed = datetime.now()
 
         # Tokenize query
-        query_terms = set(re.findall(r"\w+", query.lower()))
+        query_terms = set(WORD_PATTERN.findall(query.lower()))
         if not query_terms:
             return []
 
@@ -73,7 +76,14 @@ class SessionMemory:
 
             if score > 0:
                 # Extract a relevant snippet
-                snippet = self._extract_snippet(doc.content, list(query_terms))
+                snippet_pattern = re.compile(
+                    "|".join(re.escape(term) for term in query_terms), re.IGNORECASE
+                )
+                snippet = self._extract_snippet(
+                    doc.content,
+                    list(query_terms),
+                    pattern=snippet_pattern,
+                )
                 scored_docs.append(
                     {
                         "url": url,
@@ -90,21 +100,27 @@ class SessionMemory:
         return scored_docs[:top_k]
 
     def _extract_snippet(
-        self, content: str, terms: list[str], context_chars: int = 200
+        self,
+        content: str,
+        terms: list[str],
+        context_chars: int = 200,
+        pattern: Optional[re.Pattern] = None,
     ) -> str:
         """Extract a snippet around the first matching term."""
-        content_lower = content.lower()
+        if not terms:
+            return content[: context_chars * 2] + "..."
 
-        # Find the first occurrence of any term
-        best_pos = len(content)
-        for term in terms:
-            pos = content_lower.find(term)
-            if pos != -1 and pos < best_pos:
-                best_pos = pos
+        if pattern is None:
+            pattern = re.compile(
+                "|".join(re.escape(term) for term in terms), re.IGNORECASE
+            )
 
-        if best_pos == len(content):
+        match = pattern.search(content)
+        if not match:
             # No match found, return start of content
             return content[: context_chars * 2] + "..."
+
+        best_pos = match.start()
 
         # Extract context around the match
         start = max(0, best_pos - context_chars)
